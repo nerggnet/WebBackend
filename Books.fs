@@ -2,13 +2,22 @@ namespace WebBackend
 
 open System
 open System.IO
+
 open Microsoft.AspNetCore.Mvc
+open Microsoft.AspNetCore.Http
+
 open Microsoft.Azure.WebJobs
 open Microsoft.Azure.WebJobs.Extensions.Http
-open Microsoft.AspNetCore.Http
-open Microsoft.Extensions.Logging
-open FSharp.Azure.Storage.Table
+open Azure.Identity
+open Azure.Security.KeyVault.Secrets
+//open Microsoft.Azure.KeyVault
+//open Microsoft.Azure.Services.AppAuthentication
 open Microsoft.Azure.Cosmos.Table
+
+//open Microsoft.Extensions.Configuration.AzureKeyVault
+open Microsoft.Extensions.Logging
+
+open FSharp.Azure.Storage.Table
 open FSharp.Json
 
 module Books =
@@ -36,8 +45,6 @@ module Books =
             Books: Book list
             Error: string option
         }
-
-    let connectionString = "" // Secret
 
     let initTableClient (connectionString: string) : CloudTableClient =
         let actualConnectionString =
@@ -92,6 +99,12 @@ module Books =
             |> Seq.toList
         books
 
+    let findStorageConnectionString (log: ILogger) : string =
+        log.LogInformation <| "Trying to find Azure Storage Connection String"
+        let connectionString = Environment.GetEnvironmentVariable "StorageConnectionString"
+        log.LogInformation <| "Found this connection string: '" + connectionString + "'."
+        connectionString
+
     let insertBookInTable (tableClient: CloudTableClient) (book: Book) (log: ILogger) : unit =
         let inBookTable book = inTable tableClient "Books" book
         try
@@ -135,6 +148,7 @@ module Books =
             let commandRes = getCommandFromReqBody reqBody log
             let bookRes = getBookFromReqBody reqBody log
 
+            let connectionString = findStorageConnectionString log
             let tableClient = initTableClient connectionString
 
             let response =
