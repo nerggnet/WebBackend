@@ -101,8 +101,9 @@ module Books =
 
     let findStorageConnectionString (log: ILogger) : string =
         log.LogInformation <| "Trying to find Azure Storage Connection String"
-        let connectionString = Environment.GetEnvironmentVariable "StorageConnectionString"
-        log.LogInformation <| "Found this connection string: '" + connectionString + "'."
+        let connectionStringCandidate = Environment.GetEnvironmentVariable "StorageConnectionString"
+        log.LogInformation <| "Found this connection string: '" + connectionStringCandidate + "'."
+        let connectionString = if String.IsNullOrWhiteSpace(connectionStringCandidate) then "" else connectionStringCandidate
         connectionString
 
     let insertBookInTable (tableClient: CloudTableClient) (book: Book) (log: ILogger) : unit =
