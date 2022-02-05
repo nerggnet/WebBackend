@@ -20,5 +20,6 @@
   <ItemGroup>
     <Compile Include="AzureStorageController.fs" />
     <Compile Include="Books.fs" />
+    <Compile Include="Meals.fs" />
   </ItemGroup>
 </Project>

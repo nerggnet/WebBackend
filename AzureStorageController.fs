@@ -18,6 +18,14 @@ module AzureStorageController =
             IsFavorite: bool
         }
 
+    type Recipe =
+        {
+            [<PartitionKey>] Name: string
+            [<RowKey>] Portions: int
+        }
+
+    /// Common
+
     let findStorageConnectionString (log: ILogger) : string =
         log.LogInformation <| "Trying to find Azure Storage Connection String"
         let connectionStringCandidate = Environment.GetEnvironmentVariable "StorageConnectionString"
@@ -34,6 +42,8 @@ module AzureStorageController =
         let tableClient = account.CreateCloudTableClient()
         tableClient
  
+    /// Books
+
     let getBooksFromTable (tableClient: CloudTableClient) : Book list =
         let fromBookTable q = fromTable tableClient "Books" q
         let books =
@@ -91,3 +101,25 @@ module AzureStorageController =
                 | "Conflict" -> log.LogWarning <| "Insert failed due to conflicting Keys, PartitionKey: '" + book.Author + "', RowKey: '" + book.Title + "'."
                 | _ -> log.LogWarning <| "Insert failed with exception:\n" + sx.ToString()
             | ex -> log.LogWarning <| "Insert failed with exception:\n" + ex.ToString()
+
+    /// Recipes
+
+    let getRecipesFromTable (tableClient: CloudTableClient) : Recipe list =
+        let fromRecipeTable q = fromTable tableClient "Recipes" q
+        let recipes =
+            Query.all<Recipe>
+            |> fromRecipeTable
+            |> Seq.map (fun (b,_) -> b)
+            |> Seq.toList
+        recipes
+
+    let findRecipesUsingName (tableClient: CloudTableClient) (name: string) (log: ILogger) : Recipe list =
+        let fromRecipeTable q = fromTable tableClient "Recipes" q
+        log.LogInformation <| "Trying to find recipes with Name: '" + name + "'."
+        let recipes =
+            Query.all<Recipe>
+            |> Query.where <@ fun _ s -> s.PartitionKey = name @>
+            |> fromRecipeTable
+            |> Seq.map (fun (b,_) -> b)
+            |> Seq.toList
+        recipes
