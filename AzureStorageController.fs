@@ -21,7 +21,8 @@ module AzureStorageController =
     type Recipe =
         {
             [<PartitionKey>] Name: string
-            [<RowKey>] Portions: int
+            [<RowKey>] Link: string
+            Portions: int
         }
 
     /// Common
@@ -123,3 +124,17 @@ module AzureStorageController =
             |> Seq.map (fun (b,_) -> b)
             |> Seq.toList
         recipes
+
+    let insertRecipeInTable (tableClient: CloudTableClient) (recipe: Recipe) (log: ILogger) : unit =
+        let inRecipeTable book = inTable tableClient "Recipes" book
+        try
+            let result = recipe |> Insert |> inRecipeTable
+            ignore <| match result.HttpStatusCode with
+                      | 200 | 201 | 202 | 203 | 204 | 205 -> log.LogInformation <| "Recipe '" + recipe.ToString() + "' successfully inserted."
+                      | code -> log.LogWarning <| "Could not insert recipe '" + recipe.ToString() + "'.\nHTTP Status: '" + code.ToString() + "'."
+        with
+            | :? StorageException as sx ->
+                match sx.Message with
+                | "Conflict" -> log.LogWarning <| "Insert failed due to conflicting Keys, PartitionKey: '" + recipe.Name + "', RowKey: '" + recipe.Link + "'."
+                | _ -> log.LogWarning <| "Insert failed with exception:\n" + sx.ToString()
+            | ex -> log.LogWarning <| "Insert failed with exception:\n" + ex.ToString()

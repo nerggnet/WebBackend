@@ -24,6 +24,7 @@ module Meals =
     type RecipeJson =
         {
             Name: string option
+            Link: string option
             Portions: int option
         }
 
@@ -49,7 +50,7 @@ module Meals =
         with
             ex ->
                 log.LogWarning <| "Get Recipe failed with exception:\n" + ex.ToString()
-                { Name = None; Portions = None }
+                { Name = None; Link = None; Portions = None }
 
     [<FunctionName("Meals")>]
     let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: HttpRequest) (log: ILogger) =
@@ -87,6 +88,19 @@ module Meals =
                             log.LogWarning error
                             { Recipes = []; Error = Some error }
                         | recipes -> { Recipes = recipes; Error = None }
+                | Some "Insert" ->
+                    match recipeRes.Name with
+                    | None ->
+                        let error = "Could not Insert recipe without a 'Name'."
+                        log.LogWarning error
+                        { Recipes = []; Error = Some error }
+                    | Some name ->
+                        let recipe =
+                            let link = if recipeRes.Link.IsSome then recipeRes.Link.Value else ""
+                            let portions = if recipeRes.Portions.IsSome then recipeRes.Portions.Value else 0
+                            { Name = name; Link = link; Portions = portions } : Recipe
+                        insertRecipeInTable tableClient recipe log
+                        { Recipes = [recipe]; Error = None }
                 | Some action ->
                     let error = "Unknown Action: '" + action + "'."
                     log.LogWarning error
