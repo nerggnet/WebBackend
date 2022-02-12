@@ -112,9 +112,13 @@ module Meals =
 
             let result : IActionResult =
                 match response with
-                | { Recipes = _; Error = Some error } ->
+                | { Recipes = recipes; Error = Some error } ->
+                    let logMessage = sprintf "Something went wrong, these were the recipes: '%A', and this was the error message: '%s'" recipes error
+                    log.LogWarning logMessage
                     BadRequestObjectResult error
-                | { Recipes = books; Error = None } ->
-                    OkObjectResult books
+                | { Recipes = recipes; Error = None } ->
+                    let logMessage = sprintf "It looks like everything went well, these were the recipes: '%A'" recipes
+                    log.LogInformation logMessage
+                    OkObjectResult recipes
             return result
         }
