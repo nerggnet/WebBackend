@@ -28,10 +28,15 @@ module AzureStorageController =
     /// Common
 
     let findStorageConnectionString (log: ILogger) : string =
-        log.LogInformation <| "Trying to find Azure Storage Connection String"
+        //log.LogInformation <| "Trying to find Azure Storage Connection String"
         let connectionStringCandidate = Environment.GetEnvironmentVariable "StorageConnectionString"
-        log.LogInformation <| "Found this connection string: '" + connectionStringCandidate + "'."
-        let connectionString = if String.IsNullOrWhiteSpace(connectionStringCandidate) then "" else connectionStringCandidate
+        //log.LogInformation <| "Found this connection string: '" + connectionStringCandidate + "'."
+        let connectionString =
+            if String.IsNullOrWhiteSpace(connectionStringCandidate) then
+                log.LogWarning "Unable to find Azure Storage Connection String, if this is a local development environment using Azurite, then this is of course correct."
+                ""
+            else
+                connectionStringCandidate
         connectionString
 
     let initTableClient (connectionString: string) : CloudTableClient =
