@@ -117,8 +117,9 @@ module Meals =
                     log.LogWarning logMessage
                     BadRequestObjectResult error
                 | { Recipes = recipes; Error = None } ->
-                    let logMessage = sprintf "It looks like everything went well, these were the recipes: '%A'" recipes
+                    let serializedRecipes = Json.serialize recipes
+                    let logMessage = sprintf "It looks like everything went well, these are the serialized recipes: '%A'" serializedRecipes
                     log.LogInformation logMessage
-                    OkObjectResult recipes
+                    OkObjectResult serializedRecipes
             return result
         }

@@ -71,9 +71,15 @@ module Books =
                 | Some "Find" ->
                     match (bookRes.Author, bookRes.Title) with
                     | (None, None) ->
-                        let error = "Cannot execute 'Find' without either 'Author' or 'Title'."
-                        log.LogWarning error
-                        { Books = []; Error = Some error }
+                        let message = "No 'Author' or 'Title' specified, trying to return all books."
+                        log.LogInformation message
+                        let books = getBooksFromTable tableClient
+                        match books with
+                        | [] ->
+                            let error = "Could not find any books at all."
+                            log.LogWarning error
+                            { Books = []; Error = Some error }
+                        | books -> { Books = books; Error = None }
                     | (Some author, None) ->
                         let books = findBooksUsingAuthor tableClient author log
                         match books with
@@ -127,8 +133,9 @@ module Books =
                     log.LogWarning logMessage
                     BadRequestObjectResult error
                 | { Books = books; Error = None } ->
-                    let logMessage = sprintf "It looks like everything went well, these were the recipes: '%A'" books
+                    let serializedBooks = Json.serialize books
+                    let logMessage = sprintf "It looks like everything went well, these are the serialized books: '%A'" serializedBooks
                     log.LogInformation logMessage
-                    OkObjectResult books
+                    OkObjectResult serializedBooks
             return result
         }
