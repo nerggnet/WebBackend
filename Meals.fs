@@ -26,10 +26,17 @@ type RecipeNameJson =
         Name: string option
     }
 
-type ResponseJson =
+type OperationResponse =
     {
         Recipes: Recipe list
+        Success: string option
         Error: string option
+    }
+
+type ResponseJson =
+    {
+        Message: string option
+        Recipes: Recipe list
     }
 
 let getCommandFromReqBody (body: string) (log: ILogger) : CommandJson =
@@ -50,6 +57,24 @@ let getRecipeFromReqBody (body: string) (log: ILogger) : Recipe =
             log.LogWarning <| "Get Recipe failed with exception:\n" + ex.ToString()
             { Name = ""; Link = None; Portions = 0; Ingredients = []; Instructions = []; TastingNotes = [] }
 
+let getProductFromReqBody (body: string) (log: ILogger) : Product =
+    try
+        let product = Json.deserialize<Product> body
+        product
+    with
+        ex ->
+            log.LogWarning <| "Get Product failed with exception:\n" + ex.ToString()
+            { Name = ""; Link = None; Comments = [] }
+
+let getIngredientFromReqBody (body: string) (log: ILogger) : Ingredient =
+    try
+        let ingredient = Json.deserialize<Ingredient> body
+        ingredient
+    with
+        ex ->
+            log.LogWarning <| "Get Ingredient failed with exception:\n" + ex.ToString()
+            { Product = { Name = ""; Link = None; Comments = [] }; Quantity = { Amount = 0.0; Unit = NotDefined } }
+
 let getRecipeNameFromReqBody (body: string) (log: ILogger) : RecipeNameJson =
     try
         let recipeName = Json.deserialize<RecipeNameJson> body
@@ -68,7 +93,6 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
         let! reqBody = stream.ReadToEndAsync() |> Async.AwaitTask
 
         let commandRes = getCommandFromReqBody reqBody log
-        //let recipeRes = getRecipeFromReqBody reqBody log
 
         let connectionString = findStorageConnectionString log
         let tableClient = initTableClient connectionString
@@ -86,50 +110,86 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                     | [] ->
                         let error = "Could not find any recipes at all."
                         log.LogWarning error
-                        { Recipes = []; Error = Some error }
+                        { Recipes = []; Success = None; Error = Some error } : OperationResponse
                     | recipeDTOs ->
-                        let recipes = List.map (fun { Name = _; Json = json } -> Json.deserialize<Recipe> json) recipeDTOs
-                        { Recipes = recipes; Error = None }
+                        let recipes = List.map (fun { Name = _; NameAgain = _; Json = json } -> Json.deserialize<Recipe> json) recipeDTOs
+                        { Recipes = recipes; Success = Some "Successfully retrieved all recipes."; Error = None } : OperationResponse
                 | Some name ->
                     let recipeDTOs = findRecipesUsingName tableClient name log
                     match recipeDTOs with
                     | [] ->
                         let error = "Could not find any recipes with Name: '" + name + "'."
                         log.LogWarning error
-                        { Recipes = []; Error = Some error }
+                        { Recipes = []; Success = None; Error = Some error } : OperationResponse
                     | recipeDTOs ->
-                        let recipes = List.map (fun { Name = _; Json = json } -> Json.deserialize<Recipe> json) recipeDTOs
-                        { Recipes = recipes; Error = None }
+                        let recipes = List.map (fun { Name = _; NameAgain = _; Json = json } -> Json.deserialize<Recipe> json) recipeDTOs
+                        { Recipes = recipes; Success = Some "Successfully retrieved recipes."; Error = None } : OperationResponse
             | Some "Insert" ->
                 let recipe = getRecipeFromReqBody reqBody log
                 match recipe.Name with
                 | "" ->
                     let error = "Could not Insert recipe without a 'Name'."
                     log.LogWarning error
-                    { Recipes = []; Error = Some error }
+                    { Recipes = []; Success = None; Error = Some error } : OperationResponse
                 | name ->
                     let json = Json.serialize recipe
-                    insertRecipeInTable tableClient { Name = name; Json = json } log
-                    { Recipes = [recipe]; Error = None }
+                    let result = insertRecipeInTable tableClient { Name = name; NameAgain = name; Json = json } log
+                    match result with
+                    | Ok message -> { Recipes = [recipe]; Success = Some message; Error = None } : OperationResponse
+                    | Error error -> { Recipes = [recipe]; Success = None; Error = Some error } : OperationResponse
+            | Some "Remove" ->
+                let recipeName = getRecipeNameFromReqBody reqBody log
+                match recipeName.Name with
+                | None ->
+                    let error = "Could not Remove recipe without a 'Name'."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error } : OperationResponse
+                | Some name ->
+                    let result = removeRecipeFromTable tableClient name log
+                    match result with
+                    | Ok message -> { Recipes = []; Success = Some message; Error = None } : OperationResponse
+                    | Error error -> { Recipes = []; Success = None; Error = Some error } : OperationResponse
+            | Some "AddIngredient" ->
+                let ingredient = getIngredientFromReqBody reqBody log
+                let recipeName = getRecipeNameFromReqBody reqBody log
+                match (ingredient.Product.Name, recipeName.Name) with
+                | ("", _) ->
+                    let error = "Invalid ingredient."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, None) ->
+                    let error = "No recipe specified."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (productName, Some recipeName) ->
+                    let result = addIngredientToRecipe tableClient ingredient recipeName log
+                    match result with
+                    | Ok message -> { Recipes = []; Success = Some message; Error = None }
+                    | Error error -> { Recipes = []; Success = None; Error = Some error }
             | Some action ->
                 let error = "Unknown Action: '" + action + "'."
                 log.LogWarning error
-                { Recipes = []; Error = Some error }
+                { Recipes = []; Success = None; Error = Some error } : OperationResponse
             | None ->
                 let error = "No Action specified."
                 log.LogWarning error
-                { Recipes = []; Error = Some error }
+                { Recipes = []; Success = None; Error = Some error } : OperationResponse
 
         let result : IActionResult =
             match response with
-            | { Recipes = recipes; Error = Some error } ->
+            | { Recipes = recipes; Success = None; Error = Some error } ->
+                let errorResponse = Json.serialize { Message = response.Error; Recipes = recipes }
                 let logMessage = sprintf "Something went wrong, these were the recipes: '%A', and this was the error message: '%s'" recipes error
                 log.LogWarning logMessage
-                BadRequestObjectResult error
-            | { Recipes = recipes; Error = None } ->
-                let serializedRecipes = Json.serialize recipes
-                let logMessage = sprintf "It looks like everything went well, these are the serialized recipes: '%A'" serializedRecipes
-                log.LogInformation logMessage
-                OkObjectResult serializedRecipes
+                BadRequestObjectResult errorResponse
+            | { Recipes = recipes; Success = Some message; Error = None } ->
+                let successResponse = Json.serialize { Message = Some message; Recipes = recipes }
+                log.LogInformation "It looks like everything went well."
+                OkObjectResult successResponse
+            | { Recipes = _; Success = _; Error = _ } ->
+                let errorMessage = "Hmm, something is not configured correctly."
+                let otherResponse = Json.serialize { Message = Some errorMessage; Recipes = [] }
+                log.LogWarning errorMessage
+                BadRequestObjectResult otherResponse
         return result
     }

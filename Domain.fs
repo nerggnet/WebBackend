@@ -75,7 +75,7 @@ type Product =
 
 type QuantifiedProduct =
     {
-        ProductName : ProductName
+        Product : Product
         Quantity : Quantity
     }
 
@@ -101,7 +101,8 @@ type Recipe =
 type RecipeDTO =
     {
         [<PartitionKey>] Name : RecipeName
-        [<RowKey>] Json : string
+        [<RowKey>] NameAgain : RecipeName
+        Json : string
     }
 
 type ShoppingList =
