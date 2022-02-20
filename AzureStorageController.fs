@@ -175,7 +175,7 @@ let removeRecipeFromTable (tableClient: CloudTableClient) (name: string) (log: I
             log.LogWarning error
             Error error
 
-let addIngredientToRecipe (tableClient: CloudTableClient) (ingredient: Ingredient) (recipeName: RecipeName) (log: ILogger) : Result<string, string> =
+let getRecipeForManipulation (tableClient: CloudTableClient) (recipeName: RecipeName) (log: ILogger) : Result<(Recipe * string), string> =
     let fromRecipeTable q = fromTable tableClient "Recipes" q
     let inRecipeTable r = inTable tableClient "Recipes" r
     try
@@ -186,7 +186,7 @@ let addIngredientToRecipe (tableClient: CloudTableClient) (ingredient: Ingredien
             |> Seq.toList
         match queryResults with
         | [] ->
-            let error = "Add ingredient to recipe failed since there is no recipe with name: '" + recipeName + "'."
+            let error = "Get recipe for manipulation failed since there is no recipe with name: '" + recipeName + "'."
             log.LogWarning error
             Error error
         | queryResults ->
@@ -194,28 +194,81 @@ let addIngredientToRecipe (tableClient: CloudTableClient) (ingredient: Ingredien
                 let (recipeDTO, metaData) = queryResults.Head
                 let recipe = Json.deserialize<Recipe> recipeDTO.Json
                 let etag = metaData.Etag
-                let ingredients = recipe.Ingredients
-                let updatedIngredients = ingredient :: ingredients
-                let updatedRecipe = { recipe with Ingredients = updatedIngredients }
-                let updatedRecipeJson = Json.serialize updatedRecipe
-                let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
-                let replaceResuls = (updatedRecipeDTO, etag) |> Replace |> inRecipeTable
-                match replaceResuls.HttpStatusCode with
-                | 200 | 201 | 202 | 203 | 204 | 205 ->
-                    let message = "Adding ingredient '" + ingredient.Product.Name + "' to recipe '" + recipe.Name + "' was successful."
-                    log.LogInformation message
-                    Ok message
-                | code ->
-                    let error = "Adding ingredient '" + ingredient.Product.Name + "' to recipe '" + recipe.Name + "' failed.\nHTTP Status: '" + code.ToString() + "'."
-                    log.LogWarning error
-                    Error error
+                Ok (recipe, etag)
             with
                 | ex ->
-                    let error = "1. Add ingredient to recipe failed with exception:\n" + ex.ToString()
+                    let error = "Get recipe for manipulation failed in deserialization, with exception:\n" + ex.ToString()
                     log.LogWarning error
                     Error error
     with
         | ex ->
-            let error = "2. Add ingredient to recipe failed with exception:\n" + ex.ToString()
+            let error = "Get recipe for manipulation failed in query, with exception:\n" + ex.ToString()
             log.LogWarning error
             Error error
+
+let storeUpdatedRecipe (tableClient: CloudTableClient) (recipeDTO: RecipeDTO) (etag: string) (log: ILogger) : Result<string, string> =
+    let inRecipeTable r = inTable tableClient "Recipes" r
+    try
+        let replaceResult = (recipeDTO, etag) |> Replace |> inRecipeTable
+        match replaceResult.HttpStatusCode with
+        | 200 | 201 | 202 | 203 | 204 | 205 ->
+            let message = "Store updated recipe '" + recipeDTO.Name + "' was successful."
+            log.LogInformation message
+            Ok message
+        | code ->
+            let error = "Store updated recipe '" + recipeDTO.Name + "' failed.\nHTTP Status: '" + code.ToString() + "'."
+            log.LogWarning error
+            Error error
+    with
+        | ex ->
+            let error = "Store updated recipe failed with exception:\n" + ex.ToString()
+            log.LogWarning error
+            Error error
+
+let addIngredientToRecipe (tableClient: CloudTableClient) (ingredient: Ingredient) (recipeName: RecipeName) (log: ILogger) : Result<string, string> =
+    let getResult = getRecipeForManipulation tableClient recipeName log
+    match getResult with
+    | Ok (recipe, etag) ->
+        let ingredients = recipe.Ingredients
+        let updatedIngredients = ingredient :: ingredients
+        let updatedRecipe = { recipe with Ingredients = updatedIngredients }
+        let updatedRecipeJson = Json.serialize updatedRecipe
+        let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
+        let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+        match storeResult with
+        | Ok _ ->
+            let message = "Add ingredient '" + ingredient.Product.Name + "' to recipe '" + recipe.Name + "' was successful."
+            log.LogInformation message
+            Ok message
+        | Error _ ->
+            let error = "Add ingredient '" + ingredient.Product.Name + "' to recipe '" + recipe.Name + "' failed."
+            log.LogWarning error
+            Error error
+    | Error _ ->            
+        let error = "Add ingredient to recipe failed."
+        log.LogWarning error
+        Error error
+ 
+let addInstructionToRecipe (tableClient: CloudTableClient) (instruction: Instruction) (recipeName: RecipeName) (log: ILogger) : Result<string, string> =
+    let getResult = getRecipeForManipulation tableClient recipeName log
+    match getResult with
+    | Ok (recipe, etag) ->
+        let instructions = recipe.Instructions
+        let updatedInstructions = instruction :: instructions
+        let updatedRecipe = { recipe with Instructions = updatedInstructions }
+        let updatedRecipeJson = Json.serialize updatedRecipe
+        let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
+        let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+        match storeResult with
+        | Ok _ ->
+            let message = "Add instruction '" + instruction.Instruction + "' to recipe '" + recipe.Name + "' was successful."
+            log.LogInformation message
+            Ok message
+        | Error _ ->
+            let error = "Add instruction '" + instruction.Instruction + "' to recipe '" + recipe.Name + "' failed."
+            log.LogWarning error
+            Error error
+    | Error _ ->            
+        let error = "Add instruction to recipe failed."
+        log.LogWarning error
+        Error error

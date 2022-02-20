@@ -53,10 +53,6 @@ type Instruction =
 
 type Portions = int
 
-type RecipeInstruction = Instruction
-
-type ShoppingInstruction = Instruction
-
 type WeekDay =
     | Monday
     | Tuesday
@@ -85,7 +81,7 @@ type ShoppingItem =
     {
         Name : ShoppingItemName
         Item : QuantifiedProduct
-        Comment : ShoppingInstruction
+        Comment : Comment list
     }
 
 type Recipe =
@@ -122,24 +118,3 @@ type Menu =
         Name : MenuName
         Items : MenuItem list
     }
-
-
-// Function types
-
-type RecalculatePortions = Recipe -> Portions -> Recipe
-type AddTastingNote = Recipe -> Comment -> Recipe
-type ListRecipes = unit -> Recipe list
-type ListMenus = unit -> Menu list
-type ListShoppingLists = unit -> ShoppingList list
-type SearchRecipe = SearchString -> RecipeName list
-type SearchMenu = SearchString -> MenuName list
-type SearchShoppingList = SearchString -> ShoppingListName list
-type GetRecipe = RecipeName -> Recipe
-type GetMenu = MenuName -> Menu
-type GetShoppingList = ShoppingListName -> ShoppingList
-type RemoveRecipe = Recipe -> unit
-type RemoveMenu = Menu -> unit
-type RemoveShoppingList = ShoppingList -> unit
-type StoreRecipe = Recipe -> unit
-type StoreMenu = Menu -> unit
-type StoreShoppingList = ShoppingList -> unit

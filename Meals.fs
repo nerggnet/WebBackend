@@ -16,9 +16,17 @@ open FSharp.Json
 open Domain
 open AzureStorageController
 
+type Action
+    = Unknown
+    | Find
+    | Insert
+    | Remove
+    | AddIngredient
+    | AddInstruction
+
 type CommandJson =
     {
-        Action: string option
+        Action: Action option
     }
 
 type RecipeNameJson =
@@ -39,7 +47,7 @@ type ResponseJson =
         Recipes: Recipe list
     }
 
-let getCommandFromReqBody (body: string) (log: ILogger) : CommandJson =
+let getCommandFromReqBody' (body: string) (log: ILogger) : CommandJson =
     try
         let command = Json.deserialize<CommandJson> body
         command
@@ -47,6 +55,15 @@ let getCommandFromReqBody (body: string) (log: ILogger) : CommandJson =
         ex ->
             log.LogWarning <| "Get Command failed with exception:\n" + ex.ToString()
             { Action = None }
+
+let getCommandFromReqBody (body: string) (log: ILogger) : Action option =
+    try
+        let command = Json.deserialize<CommandJson> body
+        command.Action
+    with
+        ex ->
+            log.LogWarning <| "Get Command failed with exception:\n" + ex.ToString()
+            None
 
 let getRecipeFromReqBody (body: string) (log: ILogger) : Recipe =
     try
@@ -98,8 +115,8 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
         let tableClient = initTableClient connectionString
 
         let response =
-            match commandRes.Action with
-            | Some "Find" ->
+            match commandRes with
+            | Some Find ->
                 let recipeNameJson = getRecipeNameFromReqBody reqBody log
                 match recipeNameJson.Name with
                 | None ->
@@ -124,7 +141,7 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                     | recipeDTOs ->
                         let recipes = List.map (fun { Name = _; NameAgain = _; Json = json } -> Json.deserialize<Recipe> json) recipeDTOs
                         { Recipes = recipes; Success = Some "Successfully retrieved recipes."; Error = None } : OperationResponse
-            | Some "Insert" ->
+            | Some Insert ->
                 let recipe = getRecipeFromReqBody reqBody log
                 match recipe.Name with
                 | "" ->
@@ -137,7 +154,7 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                     match result with
                     | Ok message -> { Recipes = [recipe]; Success = Some message; Error = None } : OperationResponse
                     | Error error -> { Recipes = [recipe]; Success = None; Error = Some error } : OperationResponse
-            | Some "Remove" ->
+            | Some Remove ->
                 let recipeName = getRecipeNameFromReqBody reqBody log
                 match recipeName.Name with
                 | None ->
@@ -149,7 +166,7 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                     match result with
                     | Ok message -> { Recipes = []; Success = Some message; Error = None } : OperationResponse
                     | Error error -> { Recipes = []; Success = None; Error = Some error } : OperationResponse
-            | Some "AddIngredient" ->
+            | Some AddIngredient ->
                 let ingredient = getIngredientFromReqBody reqBody log
                 let recipeName = getRecipeNameFromReqBody reqBody log
                 match (ingredient.Product.Name, recipeName.Name) with
@@ -167,7 +184,7 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                     | Ok message -> { Recipes = []; Success = Some message; Error = None }
                     | Error error -> { Recipes = []; Success = None; Error = Some error }
             | Some action ->
-                let error = "Unknown Action: '" + action + "'."
+                let error = "Unknown Action: '" + action.ToString() + "'."
                 log.LogWarning error
                 { Recipes = []; Success = None; Error = Some error } : OperationResponse
             | None ->
