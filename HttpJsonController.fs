@@ -41,6 +41,16 @@ type IngredientNameJson =
         IngredientName: string option
     }
 
+type PortionsJson =
+    {
+        Portions: int option
+    }
+
+type LinkJson =
+    {
+        Link: HttpLink option
+    }
+
 type OperationResponse =
     {
         Recipes: Recipe list
@@ -134,3 +144,22 @@ let getCommentFromReqBody (body: string) (log: ILogger) : Comment =
         ex ->
             log.LogWarning <| "Get Instruction failed with exception:\n" + ex.ToString()
             { Comment = "" }
+
+let getPortionsFromReqBody (body: string) (log: ILogger) : PortionsJson =
+    try
+        let portions = Json.deserialize<PortionsJson> body
+        portions
+    with
+        ex ->
+            log.LogWarning <| "Get Portions failed with exception:\n" + ex.ToString()
+            { Portions = None }
+
+let getLinkFromReqBody (body: string) (log: ILogger) : LinkJson =
+    try
+        let link = Json.deserialize<LinkJson> body
+        link
+    with
+        ex ->
+            log.LogWarning <| "Get Portions failed with exception:\n" + ex.ToString()
+            { Link = None }
+

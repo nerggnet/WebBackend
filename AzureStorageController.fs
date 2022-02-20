@@ -380,3 +380,47 @@ let updateRecipeWithNewName (tableClient: CloudTableClient) (recipeName: RecipeN
         let error = "Update recipe with new name failed."
         log.LogWarning error
         Error error
+
+let updateRecipeWithNewPortions (tableClient: CloudTableClient) (recipeName: RecipeName) (newPortions: Portions) (log: ILogger) : Result<string, string> =
+    let getResult = getRecipeForManipulation tableClient recipeName log
+    match getResult with
+    | Ok (recipe, etag) ->
+        let updatedRecipe = { recipe with Portions = newPortions }
+        let updatedRecipeJson = Json.serialize updatedRecipe
+        let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
+        let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+        match storeResult with
+        | Ok _ ->
+            let message = "Update of recipe '" + recipe.Name + "' with new portions '" + newPortions.ToString() + "' was successful."
+            log.LogInformation message
+            Ok message
+        | Error _ ->
+            let error = "Update of recipe '" + recipeName + "' with new portions '" + newPortions.ToString() + "' failed."
+            log.LogWarning error
+            Error error
+    | Error _ ->
+        let error = "Update recipe with new portions failed."
+        log.LogWarning error
+        Error error
+
+let updateRecipeWithNewLink (tableClient: CloudTableClient) (recipeName: RecipeName) (newLink: HttpLink) (log: ILogger) : Result<string, string> =
+    let getResult = getRecipeForManipulation tableClient recipeName log
+    match getResult with
+    | Ok (recipe, etag) ->
+        let updatedRecipe = { recipe with Link = Some newLink }
+        let updatedRecipeJson = Json.serialize updatedRecipe
+        let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
+        let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+        match storeResult with
+        | Ok _ ->
+            let message = "Update of recipe '" + recipe.Name + "' with new link '" + newLink + "' was successful."
+            log.LogInformation message
+            Ok message
+        | Error _ ->
+            let error = "Update of recipe '" + recipeName + "' with new link '" + newLink + "' failed."
+            log.LogWarning error
+            Error error
+    | Error _ ->
+        let error = "Update recipe with new link failed."
+        log.LogWarning error
+        Error error

@@ -76,7 +76,7 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                 let recipeName = getRecipeNameFromReqBody reqBody log
                 match recipeName.RecipeName with
                 | None ->
-                    let error = "Could not Remove recipe without a 'Name'."
+                    let error = "Could not Remove recipe without a 'RecipeName'."
                     log.LogWarning error
                     { Recipes = []; Success = None; Error = Some error } : OperationResponse
                 | Some name ->
@@ -101,8 +101,40 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                     match result with
                     | Ok message -> { Recipes = []; Success = Some message; Error = None } : OperationResponse
                     | Error error -> { Recipes = []; Success = None; Error = Some error } : OperationResponse
-            | Some UpdateRecipeLink -> { Recipes = []; Success = None; Error = None } // Not yet implemented
-            | Some ChangeRecipePortions -> { Recipes = []; Success = None; Error = None } // Not yet implemented
+            | Some UpdateRecipeLink ->
+                let recipeName = getRecipeNameFromReqBody reqBody log
+                let link = getLinkFromReqBody reqBody log
+                match (recipeName.RecipeName, link.Link) with
+                | (None, _) ->
+                    let error = "No recipe to change found."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, None) ->
+                    let error = "No new link specified."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (Some recipeName, Some httpLink) ->
+                    let result = updateRecipeWithNewLink tableClient recipeName httpLink log
+                    match result with
+                    | Ok message -> { Recipes = []; Success = Some message; Error = None }
+                    | Error error -> { Recipes = []; Success = None; Error = Some error }
+            | Some ChangeRecipePortions ->
+                let recipeName = getRecipeNameFromReqBody reqBody log
+                let portions = getPortionsFromReqBody reqBody log
+                match (recipeName.RecipeName, portions.Portions) with
+                | (None, _) ->
+                    let error = "No recipe to change found."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, None) ->
+                    let error = "No new portion size specified."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (Some recipeName, Some portions) ->
+                    let result = updateRecipeWithNewPortions tableClient recipeName portions log
+                    match result with
+                    | Ok message -> { Recipes = []; Success = Some message; Error = None }
+                    | Error error -> { Recipes = []; Success = None; Error = Some error }
             | Some AddIngredientToRecipe ->
                 let ingredient = getIngredientFromReqBody reqBody log
                 let recipeName = getRecipeNameFromReqBody reqBody log
