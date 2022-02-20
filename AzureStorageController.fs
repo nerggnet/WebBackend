@@ -20,7 +20,7 @@ let findStorageConnectionString (log: ILogger) : string =
     let connectionStringCandidate = Environment.GetEnvironmentVariable "StorageConnectionString"
     let connectionString =
         if String.IsNullOrWhiteSpace(connectionStringCandidate) then
-            log.LogWarning "Unable to find Azure Storage Connection String, if this is a local development environment using Azurite, then this is of course correct."
+            log.LogInformation "Unable to find Azure Storage Connection String, if this is a local development environment using Azurite, then this is of course correct."
             ""
         else
             connectionStringCandidate
@@ -178,18 +178,25 @@ let addIngredientToRecipe (tableClient: CloudTableClient) (ingredient: Ingredien
     match getResult with
     | Ok (recipe, etag) ->
         let ingredients = recipe.Ingredients
-        let updatedIngredients = ingredient :: ingredients
-        let updatedRecipe = { recipe with Ingredients = updatedIngredients }
-        let updatedRecipeJson = Json.serialize updatedRecipe
-        let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
-        let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
-        match storeResult with
-        | Ok _ ->
-            let message = "Add ingredient '" + ingredient.Product.Name + "' to recipe '" + recipe.Name + "' was successful."
-            log.LogInformation message
-            Ok message
-        | Error _ ->
-            let error = "Add ingredient '" + ingredient.Product.Name + "' to recipe '" + recipe.Name + "' failed."
+        let alreadyInList = List.exists (fun elem -> elem.Product.Name = ingredient.Product.Name) ingredients
+        match alreadyInList with
+        | false ->
+            let updatedIngredients = ingredients @ [ingredient]
+            let updatedRecipe = { recipe with Ingredients = updatedIngredients }
+            let updatedRecipeJson = Json.serialize updatedRecipe
+            let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
+            let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+            match storeResult with
+            | Ok _ ->
+                let message = "Add ingredient '" + ingredient.Product.Name + "' to recipe '" + recipe.Name + "' was successful."
+                log.LogInformation message
+                Ok message
+            | Error _ ->
+                let error = "Add ingredient '" + ingredient.Product.Name + "' to recipe '" + recipe.Name + "' failed."
+                log.LogWarning error
+                Error error
+        | true ->
+            let error = "The same ingredient already exists in the recipe."
             log.LogWarning error
             Error error
     | Error _ ->            
@@ -202,21 +209,174 @@ let addInstructionToRecipe (tableClient: CloudTableClient) (instruction: Instruc
     match getResult with
     | Ok (recipe, etag) ->
         let instructions = recipe.Instructions
-        let updatedInstructions = instruction :: instructions
-        let updatedRecipe = { recipe with Instructions = updatedInstructions }
+        let alreadyInList = List.exists (fun elem -> elem = instruction) instructions
+        match alreadyInList with
+        | false ->
+            let updatedInstructions = instructions @ [instruction]
+            let updatedRecipe = { recipe with Instructions = updatedInstructions }
+            let updatedRecipeJson = Json.serialize updatedRecipe
+            let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
+            let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+            match storeResult with
+            | Ok _ ->
+                let message = "Add instruction '" + instruction.Instruction + "' to recipe '" + recipe.Name + "' was successful."
+                log.LogInformation message
+                Ok message
+            | Error _ ->
+                let error = "Add instruction '" + instruction.Instruction + "' to recipe '" + recipe.Name + "' failed."
+                log.LogWarning error
+                Error error
+        | true ->
+            let error = "The same instruction already exists in the recipe."
+            log.LogWarning error
+            Error error
+    | Error _ ->            
+        let error = "Add instruction to recipe failed."
+        log.LogWarning error
+        Error error
+
+let addCommentToRecipe (tableClient: CloudTableClient) (comment: Comment) (recipeName: RecipeName) (log: ILogger) : Result<string, string> =
+    let getResult = getRecipeForManipulation tableClient recipeName log
+    match getResult with
+    | Ok (recipe, etag) ->
+        let comments = recipe.Comments
+        let alreadyInList = List.exists (fun elem -> elem = comment) comments
+        match alreadyInList with
+        | false ->
+            let updatedComments = comments @ [comment]
+            let updatedRecipe = { recipe with Comments = updatedComments }
+            let updatedRecipeJson = Json.serialize updatedRecipe
+            let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
+            let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+            match storeResult with
+            | Ok _ ->
+                let message = "Add comment '" + comment.Comment + "' to recipe '" + recipe.Name + "' was successful."
+                log.LogInformation message
+                Ok message
+            | Error _ ->
+                let error = "Add comment '" + comment.Comment + "' to recipe '" + recipe.Name + "' failed."
+                log.LogWarning error
+                Error error
+        | true ->
+            let error = "The same comment already exists in the recipe."
+            log.LogWarning error
+            Error error
+    | Error _ ->            
+        let error = "Add comment to recipe failed."
+        log.LogWarning error
+        Error error
+
+let removeIngredientFromRecipe (tableClient: CloudTableClient) (ingredientName: ProductName) (recipeName: RecipeName) (log: ILogger) : Result<string, string> =
+    let getResult = getRecipeForManipulation tableClient recipeName log
+    match getResult with
+    | Ok (recipe, etag) ->
+        let ingredients = recipe.Ingredients
+        let inList = List.exists (fun elem -> elem.Product.Name = ingredientName) ingredients
+        match inList with
+        | true ->
+            let updatedIngredients = List.filter (fun elem -> elem.Product.Name <> ingredientName) ingredients
+            let updatedRecipe = { recipe with Ingredients = updatedIngredients }
+            let updatedRecipeJson = Json.serialize updatedRecipe
+            let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
+            let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+            match storeResult with
+            | Ok _ ->
+                let message = "Remove ingredient '" + ingredientName + "' from recipe '" + recipe.Name + "' was successful."
+                log.LogInformation message
+                Ok message
+            | Error _ ->
+                let error = "Remove ingredient '" + ingredientName + "' from recipe '" + recipe.Name + "' failed."
+                log.LogWarning error
+                Error error
+        | false ->
+            let error = "The ingredient could not be found in the recipe."
+            log.LogWarning error
+            Error error
+    | Error _ ->            
+        let error = "Remove ingredient from recipe failed."
+        log.LogWarning error
+        Error error
+
+let removeInstructionFromRecipe (tableClient: CloudTableClient) (instruction: Instruction) (recipeName: RecipeName) (log: ILogger) : Result<string, string> =
+    let getResult = getRecipeForManipulation tableClient recipeName log
+    match getResult with
+    | Ok (recipe, etag) ->
+        let instructions = recipe.Instructions
+        let inList = List.exists (fun elem -> elem = instruction) instructions
+        match inList with
+        | true ->
+            let updatedInstructions = List.filter (fun elem -> elem <> instruction) instructions
+            let updatedRecipe = { recipe with Instructions = updatedInstructions }
+            let updatedRecipeJson = Json.serialize updatedRecipe
+            let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
+            let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+            match storeResult with
+            | Ok _ ->
+                let message = "Remove instruction '" + instruction.Instruction + "' from recipe '" + recipe.Name + "' was successful."
+                log.LogInformation message
+                Ok message
+            | Error _ ->
+                let error = "Remove instruction '" + instruction.Instruction + "' from recipe '" + recipe.Name + "' failed."
+                log.LogWarning error
+                Error error
+        | false ->
+            let error = "The instruction could not be found in the recipe."
+            log.LogWarning error
+            Error error
+    | Error _ ->            
+        let error = "Remove instruction from recipe failed."
+        log.LogWarning error
+        Error error
+
+let removeCommentFromRecipe (tableClient: CloudTableClient) (comment: Comment) (recipeName: RecipeName) (log: ILogger) : Result<string, string> =
+    let getResult = getRecipeForManipulation tableClient recipeName log
+    match getResult with
+    | Ok (recipe, etag) ->
+        let comments = recipe.Comments
+        let inList = List.exists (fun elem -> elem = comment) comments
+        match inList with
+        | true ->
+            let updatedComments = List.filter (fun elem -> elem <> comment) comments
+            let updatedRecipe = { recipe with Comments = updatedComments }
+            let updatedRecipeJson = Json.serialize updatedRecipe
+            let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
+            let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+            match storeResult with
+            | Ok _ ->
+                let message = "Remove comment '" + comment.Comment + "' from recipe '" + recipe.Name + "' was successful."
+                log.LogInformation message
+                Ok message
+            | Error _ ->
+                let error = "Remove comment '" + comment.Comment + "' from recipe '" + recipe.Name + "' failed."
+                log.LogWarning error
+                Error error
+        | false ->
+            let error = "The comment could not be found in the recipe."
+            log.LogWarning error
+            Error error
+    | Error _ ->            
+        let error = "Remove comment from recipe failed."
+        log.LogWarning error
+        Error error
+
+let updateRecipeWithNewName (tableClient: CloudTableClient) (recipeName: RecipeName) (newRecipeName: RecipeName) (log: ILogger) : Result<string, string> =
+    let getResult = getRecipeForManipulation tableClient recipeName log
+    match getResult with
+    | Ok (recipe, etag) ->
+        let updatedRecipe = { recipe with Name = newRecipeName }
         let updatedRecipeJson = Json.serialize updatedRecipe
         let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
         let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
         match storeResult with
         | Ok _ ->
-            let message = "Add instruction '" + instruction.Instruction + "' to recipe '" + recipe.Name + "' was successful."
+            let message = "Update of recipe '" + recipe.Name + "' with new name '" + updatedRecipe.Name + "' was successful."
             log.LogInformation message
             Ok message
         | Error _ ->
-            let error = "Add instruction '" + instruction.Instruction + "' to recipe '" + recipe.Name + "' failed."
+            let error = "Update of recipe '" + recipeName + "' with new name '" + newRecipeName + "' failed."
             log.LogWarning error
             Error error
-    | Error _ ->            
-        let error = "Add instruction to recipe failed."
+    | Error _ ->
+        let error = "Update recipe with new name failed."
         log.LogWarning error
         Error error

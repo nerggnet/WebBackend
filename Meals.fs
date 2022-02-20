@@ -33,9 +33,10 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
 
         let response =
             match commandRes with
-            | Some Find ->
+            | Some Unknown -> { Recipes = []; Success = None; Error = None } // Action Unknown is for development/testing purposes only
+            | Some FindRecipe ->
                 let recipeNameJson = getRecipeNameFromReqBody reqBody log
-                match recipeNameJson.Name with
+                match recipeNameJson.RecipeName with
                 | None ->
                     let message = "No 'Name' specified, trying to return all recipes."
                     log.LogInformation message
@@ -58,7 +59,7 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                     | recipeDTOs ->
                         let recipes = List.map (fun { Name = _; NameAgain = _; Json = json } -> Json.deserialize<Recipe> json) recipeDTOs
                         { Recipes = recipes; Success = Some "Successfully retrieved recipes."; Error = None } : OperationResponse
-            | Some Insert ->
+            | Some InsertRecipe ->
                 let recipe = getRecipeFromReqBody reqBody log
                 match recipe.Name with
                 | "" ->
@@ -71,9 +72,9 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                     match result with
                     | Ok message -> { Recipes = [recipe]; Success = Some message; Error = None } : OperationResponse
                     | Error error -> { Recipes = [recipe]; Success = None; Error = Some error } : OperationResponse
-            | Some Remove ->
+            | Some RemoveRecipe ->
                 let recipeName = getRecipeNameFromReqBody reqBody log
-                match recipeName.Name with
+                match recipeName.RecipeName with
                 | None ->
                     let error = "Could not Remove recipe without a 'Name'."
                     log.LogWarning error
@@ -83,10 +84,29 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                     match result with
                     | Ok message -> { Recipes = []; Success = Some message; Error = None } : OperationResponse
                     | Error error -> { Recipes = []; Success = None; Error = Some error } : OperationResponse
-            | Some AddIngredient ->
+            | Some ChangeRecipeName ->
+                let recipeName = getRecipeNameFromReqBody reqBody log
+                let newRecipeName = getNewRecipeNameFromReqBody reqBody log
+                match (recipeName.RecipeName, newRecipeName.NewRecipeName) with
+                | (None, _) ->
+                    let error = "No recipe to change found."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, None) ->
+                    let error = "No new recipe name specified."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (Some recipeName, Some newRecipeName) ->
+                    let result = updateRecipeWithNewName tableClient recipeName newRecipeName log
+                    match result with
+                    | Ok message -> { Recipes = []; Success = Some message; Error = None } : OperationResponse
+                    | Error error -> { Recipes = []; Success = None; Error = Some error } : OperationResponse
+            | Some UpdateRecipeLink -> { Recipes = []; Success = None; Error = None } // Not yet implemented
+            | Some ChangeRecipePortions -> { Recipes = []; Success = None; Error = None } // Not yet implemented
+            | Some AddIngredientToRecipe ->
                 let ingredient = getIngredientFromReqBody reqBody log
                 let recipeName = getRecipeNameFromReqBody reqBody log
-                match (ingredient.Product.Name, recipeName.Name) with
+                match (ingredient.Product.Name, recipeName.RecipeName) with
                 | ("", _) ->
                     let error = "Invalid ingredient."
                     log.LogWarning error
@@ -100,12 +120,97 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                     match result with
                     | Ok message -> { Recipes = []; Success = Some message; Error = None }
                     | Error error -> { Recipes = []; Success = None; Error = Some error }
-            | Some action ->
-                let error = "Unknown Action: '" + action.ToString() + "'."
-                log.LogWarning error
-                { Recipes = []; Success = None; Error = Some error } : OperationResponse
+            | Some AddInstructionToRecipe ->
+                let instruction = getInstructionFromReqBody reqBody log
+                let recipeName = getRecipeNameFromReqBody reqBody log
+                match (instruction.Instruction, recipeName.RecipeName) with
+                | ("", _) ->
+                    let error = "Invalid instruction."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, None) ->
+                    let error = "No recipe specified."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, Some recipeName) ->
+                    let result = addInstructionToRecipe tableClient instruction recipeName log
+                    match result with
+                    | Ok message -> { Recipes = []; Success = Some message; Error = None }
+                    | Error error -> { Recipes = []; Success = None; Error = Some error }
+            | Some AddCommentToRecipe ->
+                let comment = getCommentFromReqBody reqBody log
+                let recipeName = getRecipeNameFromReqBody reqBody log
+                match (comment.Comment, recipeName.RecipeName) with
+                | ("", _) ->
+                    let error = "Invalid comment."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, None) ->
+                    let error = "No recipe specified."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, Some recipeName) ->
+                    let result = addCommentToRecipe tableClient comment recipeName log
+                    match result with
+                    | Ok message -> { Recipes = []; Success = Some message; Error = None }
+                    | Error error -> { Recipes = []; Success = None; Error = Some error }
+            | Some RemoveIngredientFromRecipe ->
+                let ingredient = getIngredientNameFromReqBody reqBody log
+                let recipeName = getRecipeNameFromReqBody reqBody log
+                match (ingredient.IngredientName, recipeName.RecipeName) with
+                | (None, _) ->
+                    let error = "Invalid ingredient."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, None) ->
+                    let error = "No recipe specified."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (Some ingredientName, Some recipeName) ->
+                    let result = removeIngredientFromRecipe tableClient ingredientName recipeName log
+                    match result with
+                    | Ok message -> { Recipes = []; Success = Some message; Error = None }
+                    | Error error -> { Recipes = []; Success = None; Error = Some error }
+            | Some RemoveInstructionFromRecipe ->
+                let instruction = getInstructionFromReqBody reqBody log
+                let recipeName = getRecipeNameFromReqBody reqBody log
+                match (instruction.Instruction, recipeName.RecipeName) with
+                | ("", _) ->
+                    let error = "Invalid instruction."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, None) ->
+                    let error = "No recipe specified."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, Some recipeName) ->
+                    let result = removeInstructionFromRecipe tableClient instruction recipeName log
+                    match result with
+                    | Ok message -> { Recipes = []; Success = Some message; Error = None }
+                    | Error error -> { Recipes = []; Success = None; Error = Some error }
+            | Some RemoveCommentFromRecipe ->
+                let comment = getCommentFromReqBody reqBody log
+                let recipeName = getRecipeNameFromReqBody reqBody log
+                match (comment.Comment, recipeName.RecipeName) with
+                | ("", _) ->
+                    let error = "Invalid comment."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, None) ->
+                    let error = "No recipe specified."
+                    log.LogWarning error
+                    { Recipes = []; Success = None; Error = Some error }
+                | (_, Some recipeName) ->
+                    let result = removeCommentFromRecipe tableClient comment recipeName log
+                    match result with
+                    | Ok message -> { Recipes = []; Success = Some message; Error = None }
+                    | Error error -> { Recipes = []; Success = None; Error = Some error }
+            // | Some action ->
+            //     let error = "Action: '" + action.ToString() + "' not yet implemented."
+            //     log.LogWarning error
+            //     { Recipes = []; Success = None; Error = Some error } : OperationResponse
             | None ->
-                let error = "No Action specified."
+                let error = "Could not identify a supported Action."
                 log.LogWarning error
                 { Recipes = []; Success = None; Error = Some error } : OperationResponse
 

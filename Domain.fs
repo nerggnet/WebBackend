@@ -80,7 +80,7 @@ type Recipe =
         Portions : Portions
         Ingredients : Ingredient list
         Instructions : Instruction list
-        TastingNotes : Comment list
+        Comments : Comment list
     }
 
 type ShoppingList =

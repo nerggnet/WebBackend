@@ -8,11 +8,18 @@ open Domain
 
 type Action
     = Unknown
-    | Find
-    | Insert
-    | Remove
-    | AddIngredient
-    | AddInstruction
+    | FindRecipe
+    | InsertRecipe
+    | RemoveRecipe
+    | ChangeRecipeName
+    | UpdateRecipeLink
+    | ChangeRecipePortions
+    | AddIngredientToRecipe
+    | AddInstructionToRecipe
+    | AddCommentToRecipe
+    | RemoveIngredientFromRecipe
+    | RemoveInstructionFromRecipe
+    | RemoveCommentFromRecipe
 
 type CommandJson =
     {
@@ -21,7 +28,17 @@ type CommandJson =
 
 type RecipeNameJson =
     {
-        Name: string option
+        RecipeName: string option
+    }
+
+type NewRecipeNameJson =
+    {
+        NewRecipeName: string option
+    }
+
+type IngredientNameJson =
+    {
+        IngredientName: string option
     }
 
 type OperationResponse =
@@ -46,6 +63,24 @@ let getCommandFromReqBody (body: string) (log: ILogger) : Action option =
             log.LogWarning <| "Get Command failed with exception:\n" + ex.ToString()
             None
 
+let getRecipeNameFromReqBody (body: string) (log: ILogger) : RecipeNameJson =
+    try
+        let recipeName = Json.deserialize<RecipeNameJson> body
+        recipeName
+    with
+        ex ->
+            log.LogWarning <| "Get Recipe name failed with exception:\n" + ex.ToString()
+            { RecipeName = None }
+
+let getNewRecipeNameFromReqBody (body: string) (log: ILogger) : NewRecipeNameJson =
+    try
+        let newRecipeName = Json.deserialize<NewRecipeNameJson> body
+        newRecipeName
+    with
+        ex ->
+            log.LogWarning <| "Get NewRecipe name failed with exception:\n" + ex.ToString()
+            { NewRecipeName = None }
+
 let getRecipeFromReqBody (body: string) (log: ILogger) : Recipe =
     try
         let recipe = Json.deserialize<Recipe> body
@@ -53,7 +88,7 @@ let getRecipeFromReqBody (body: string) (log: ILogger) : Recipe =
     with
         ex ->
             log.LogWarning <| "Get Recipe failed with exception:\n" + ex.ToString()
-            { Name = ""; Link = None; Portions = 0; Ingredients = []; Instructions = []; TastingNotes = [] }
+            { Name = ""; Link = None; Portions = 0; Ingredients = []; Instructions = []; Comments = [] }
 
 let getProductFromReqBody (body: string) (log: ILogger) : Product =
     try
@@ -64,6 +99,15 @@ let getProductFromReqBody (body: string) (log: ILogger) : Product =
             log.LogWarning <| "Get Product failed with exception:\n" + ex.ToString()
             { Name = ""; Link = None; Comments = [] }
 
+let getIngredientNameFromReqBody (body: string) (log: ILogger) : IngredientNameJson =
+    try
+        let ingredientName = Json.deserialize<IngredientNameJson> body
+        ingredientName
+    with
+        ex ->
+            log.LogWarning <| "Get Ingredient name failed with exception:\n" + ex.ToString()
+            { IngredientName = None }
+
 let getIngredientFromReqBody (body: string) (log: ILogger) : Ingredient =
     try
         let ingredient = Json.deserialize<Ingredient> body
@@ -73,11 +117,20 @@ let getIngredientFromReqBody (body: string) (log: ILogger) : Ingredient =
             log.LogWarning <| "Get Ingredient failed with exception:\n" + ex.ToString()
             { Product = { Name = ""; Link = None; Comments = [] }; Quantity = { Amount = 0.0; Unit = NotDefined } }
 
-let getRecipeNameFromReqBody (body: string) (log: ILogger) : RecipeNameJson =
+let getInstructionFromReqBody (body: string) (log: ILogger) : Instruction =
     try
-        let recipeName = Json.deserialize<RecipeNameJson> body
-        recipeName
+        let instruction = Json.deserialize<Instruction> body
+        instruction
     with
         ex ->
-            log.LogWarning <| "Get Recipe failed with exception:\n" + ex.ToString()
-            { Name = None }
+            log.LogWarning <| "Get Instruction failed with exception:\n" + ex.ToString()
+            { Instruction = "" }
+
+let getCommentFromReqBody (body: string) (log: ILogger) : Comment =
+    try
+        let comment = Json.deserialize<Comment> body
+        comment
+    with
+        ex ->
+            log.LogWarning <| "Get Instruction failed with exception:\n" + ex.ToString()
+            { Comment = "" }
