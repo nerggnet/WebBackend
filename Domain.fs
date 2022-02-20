@@ -1,16 +1,5 @@
 module WebBackend.Domain
 
-open FSharp.Azure.Storage.Table
-
-// Books
-
-type Book =
-    {
-        [<PartitionKey>] Author: string
-        [<RowKey>] Title: string
-        IsFavorite: bool
-    }
-
 
 // Meals
 
@@ -92,13 +81,6 @@ type Recipe =
         Ingredients : Ingredient list
         Instructions : Instruction list
         TastingNotes : Comment list
-    }
-
-type RecipeDTO =
-    {
-        [<PartitionKey>] Name : RecipeName
-        [<RowKey>] NameAgain : RecipeName
-        Json : string
     }
 
 type ShoppingList =

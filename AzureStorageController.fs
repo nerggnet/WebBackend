@@ -35,67 +35,15 @@ let initTableClient (connectionString: string) : CloudTableClient =
     let tableClient = account.CreateCloudTableClient()
     tableClient
 
-/// Books
-
-let getBooksFromTable (tableClient: CloudTableClient) : Book list =
-    let fromBookTable q = fromTable tableClient "Books" q
-    let books =
-        Query.all<Book>
-        |> fromBookTable
-        |> Seq.map (fun (b,_) -> b)
-        |> Seq.toList
-    books
-
-let findBookUsingAuthorAndTitle (tableClient: CloudTableClient) (author: string) (title: string) (log: ILogger) : Book option =
-    let fromBookTable q = fromTable tableClient "Books" q
-    log.LogInformation <| "Trying to find book with Author: '" + author + "' and Title: '" + title + "'."
-    let books =
-        Query.all<Book>
-        |> Query.where <@ fun _ s -> s.PartitionKey = author && s.RowKey = title @>
-        |> fromBookTable
-        |> Seq.map (fun (b,_) -> b)
-        |> Seq.toList
-    match books with
-    | [] -> None
-    | (book::_) -> Some book
-
-let findBooksUsingAuthor (tableClient: CloudTableClient) (author: string) (log: ILogger) : Book list =
-    let fromBookTable q = fromTable tableClient "Books" q
-    log.LogInformation <| "Trying to find books with Author: '" + author + "'."
-    let books =
-        Query.all<Book>
-        |> Query.where <@ fun _ s -> s.PartitionKey = author @>
-        |> fromBookTable
-        |> Seq.map (fun (b,_) -> b)
-        |> Seq.toList
-    books
-
-let findBooksUsingTitle (tableClient: CloudTableClient) (title: string) (log: ILogger) : Book list =
-    let fromBookTable q = fromTable tableClient "Books" q
-    log.LogInformation <| "Trying to find books with Title: '" + title + "'."
-    let books =
-        Query.all<Book>
-        |> Query.where <@ fun _ s -> s.RowKey = title @>
-        |> fromBookTable
-        |> Seq.map (fun (b,_) -> b)
-        |> Seq.toList
-    books
-
-let insertBookInTable (tableClient: CloudTableClient) (book: Book) (log: ILogger) : unit =
-    let inBookTable b = inTable tableClient "Books" b
-    try
-        let result = book |> Insert |> inBookTable
-        ignore <| match result.HttpStatusCode with
-                    | 200 | 201 | 202 | 203 | 204 | 205 -> log.LogInformation <| "Book '" + book.ToString() + "' successfully inserted."
-                    | code -> log.LogWarning <| "Could not insert book '" + book.ToString() + "'.\nHTTP Status: '" + code.ToString() + "'."
-    with
-        | :? StorageException as sx ->
-            match sx.Message with
-            | "Conflict" -> log.LogWarning <| "Insert failed due to conflicting Keys, PartitionKey: '" + book.Author + "', RowKey: '" + book.Title + "'."
-            | _ -> log.LogWarning <| "Insert failed with exception:\n" + sx.ToString()
-        | ex -> log.LogWarning <| "Insert failed with exception:\n" + ex.ToString()
 
 /// Recipes
+
+type RecipeDTO =
+    {
+        [<PartitionKey>] Name : RecipeName
+        [<RowKey>] NameAgain : RecipeName
+        Json : string
+    }
 
 let getRecipesFromTable (tableClient: CloudTableClient) : RecipeDTO list =
     let fromRecipeTable q = fromTable tableClient "Recipes" q

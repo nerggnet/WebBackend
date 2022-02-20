@@ -19,8 +19,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Domain.fs" />
+    <Compile Include="HttpJsonController.fs" />
     <Compile Include="AzureStorageController.fs" />
-    <Compile Include="Books.fs" />
     <Compile Include="Meals.fs" />
   </ItemGroup>
 </Project>
