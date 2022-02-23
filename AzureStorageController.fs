@@ -424,3 +424,226 @@ let updateRecipeWithNewLink (tableClient: CloudTableClient) (recipeName: RecipeN
         let error = "Update recipe with new link failed."
         log.LogWarning error
         Error error
+
+
+/// Menus
+
+type MenuDTO =
+    {
+        [<PartitionKey>] Name : MenuName
+        [<RowKey>] NameAgain : MenuName
+        Json : string
+    }
+
+let getMenusFromTable (tableClient: CloudTableClient) : MenuDTO list =
+    let fromMenusTable q = fromTable tableClient "Menus" q
+    let menus =
+        Query.all<MenuDTO>
+        |> fromMenusTable
+        |> Seq.map (fun (b,_) -> b)
+        |> Seq.toList
+    menus
+
+let findMenusUsingName (tableClient: CloudTableClient) (name: string) (log: ILogger) : MenuDTO list =
+    let fromMenuTable q = fromTable tableClient "Menus" q
+    log.LogInformation <| "Trying to find menus with Name: '" + name + "'."
+    let menus =
+        Query.all<MenuDTO>
+        |> Query.where <@ fun _ s -> s.PartitionKey = name @>
+        |> fromMenuTable
+        |> Seq.map (fun (b,_) -> b)
+        |> Seq.toList
+    menus
+
+let insertMenuInTable (tableClient: CloudTableClient) (menu: MenuDTO) (log: ILogger) : Result<string, string> =
+    let inMenuTable r = inTable tableClient "Menus" r
+    try
+        let result = menu |> Insert |> inMenuTable
+        match result.HttpStatusCode with
+        | 200 | 201 | 202 | 203 | 204 | 205 ->
+            let message = "Menu '" + menu.Name.ToString() + "' successfully inserted."
+            log.LogInformation message
+            Ok message
+        | code ->
+            let error = "Could not insert menu '" + menu.ToString() + "'.\nHTTP Status: '" + code.ToString() + "'."
+            log.LogWarning error
+            Error error
+    with
+        | :? StorageException as sx ->
+            match sx.Message with
+            | "Conflict" ->
+                let error = "Insert failed due to conflicting Keys, a menu with name '" + menu.Name + "' already exists."
+                log.LogWarning error
+                Error error
+            | _ ->
+                let error = "Insert failed with exception:\n" + sx.ToString()
+                log.LogWarning error
+                Error error
+        | ex ->
+            let error = "Insert failed with exception:\n" + ex.ToString()
+            log.LogWarning error
+            Error error
+
+let removeMenuFromTable (tableClient: CloudTableClient) (name: string) (log: ILogger) : Result<string, string> =
+    let inMenuTable r = inTable tableClient "Menus" r
+    try
+        let result = { EntityIdentifier.PartitionKey = name; RowKey = name } |> ForceDelete |> inMenuTable
+        match result.HttpStatusCode with
+        | 200 | 201 | 202 | 203 | 204 | 205 ->
+            let message = "Menu '" + name + "' successfully removed."
+            log.LogInformation message
+            Ok message
+        | code ->
+            let error = "Could not remove menu '" + name + "'.\nHTTP Status: '" + code.ToString() + "'."
+            log.LogWarning error
+            Error error
+    with
+        | :? StorageException as sx ->
+            match sx.Message with
+            | "Not Found" ->
+                let error = "Remove failed due to that a menu with name: '" + name + "' could not be found."
+                log.LogWarning error
+                Error error
+            | _ ->
+                let error = "Remove failed with exception:\n" + sx.ToString()
+                log.LogWarning error
+                Error error
+        | ex ->
+            let error = "Remove failed with exception:\n" + ex.ToString()
+            log.LogWarning error
+            Error error
+
+let getMenuForManipulation (tableClient: CloudTableClient) (menuName: MenuName) (log: ILogger) : Result<(Menu * string), string> =
+    let fromMenuTable q = fromTable tableClient "Menus" q
+    let inMenuTable r = inTable tableClient "Menus" r
+    try
+        let queryResults =
+            Query.all<MenuDTO>
+            |> Query.where <@ fun _ s -> s.PartitionKey = menuName && s.RowKey = menuName @>
+            |> fromMenuTable
+            |> Seq.toList
+        match queryResults with
+        | [] ->
+            let error = "Get menu for manipulation failed since there is no menu with name: '" + menuName + "'."
+            log.LogWarning error
+            Error error
+        | queryResults ->
+            try
+                let (menuDTO, metaData) = queryResults.Head
+                let menu = Json.deserialize<Menu> menuDTO.Json
+                let etag = metaData.Etag
+                Ok (menu, etag)
+            with
+                | ex ->
+                    let error = "Get menu for manipulation failed in deserialization, with exception:\n" + ex.ToString()
+                    log.LogWarning error
+                    Error error
+    with
+        | ex ->
+            let error = "Get menu for manipulation failed in query, with exception:\n" + ex.ToString()
+            log.LogWarning error
+            Error error
+
+let storeUpdatedMenu (tableClient: CloudTableClient) (menuDTO: MenuDTO) (etag: string) (log: ILogger) : Result<string, string> =
+    let inMenuTable r = inTable tableClient "Menus" r
+    try
+        let replaceResult = (menuDTO, etag) |> Replace |> inMenuTable
+        match replaceResult.HttpStatusCode with
+        | 200 | 201 | 202 | 203 | 204 | 205 ->
+            let message = "Store updated menu '" + menuDTO.Name + "' was successful."
+            log.LogInformation message
+            Ok message
+        | code ->
+            let error = "Store updated menu '" + menuDTO.Name + "' failed.\nHTTP Status: '" + code.ToString() + "'."
+            log.LogWarning error
+            Error error
+    with
+        | ex ->
+            let error = "Store updated menu failed with exception:\n" + ex.ToString()
+            log.LogWarning error
+            Error error
+
+let updateMenuWithNewName (tableClient: CloudTableClient) (menuName: MenuName) (newMenuName: MenuName) (log: ILogger) : Result<string, string> =
+    let getResult = getMenuForManipulation tableClient menuName log
+    match getResult with
+    | Ok (menu, etag) ->
+        let updatedMenu = { menu with Name = newMenuName } : Menu
+        let updatedMenuJson = Json.serialize updatedMenu
+        let updatedMenuDTO = { Name = updatedMenu.Name; NameAgain = updatedMenu.Name; Json = updatedMenuJson }
+        let storeResult = storeUpdatedMenu tableClient updatedMenuDTO etag log
+        match storeResult with
+        | Ok _ ->
+            let message = "Update of menu '" + menu.Name + "' with new name '" + updatedMenu.Name + "' was successful."
+            log.LogInformation message
+            Ok message
+        | Error _ ->
+            let error = "Update of menu '" + menuName + "' with new name '" + newMenuName + "' failed."
+            log.LogWarning error
+            Error error
+    | Error _ ->
+        let error = "Update menu with new name failed."
+        log.LogWarning error
+        Error error
+
+let addItemToMenu (tableClient: CloudTableClient) (menuItem: MenuItem) (menuName: MenuName) (log: ILogger) : Result<string, string> =
+    let getResult = getMenuForManipulation tableClient menuName log
+    match getResult with
+    | Ok (menu, etag) ->
+        let menuItems = menu.Items
+        let alreadyInList = List.exists (fun elem -> elem.Recipe.Name = menuItem.Recipe.Name && elem.WeekDay = menuItem.WeekDay) menuItems
+        match alreadyInList with
+        | false ->
+            let updatedItems = menuItems @ [menuItem]
+            let updatedMenu = { menu with Items = updatedItems }
+            let updatedMenuJson = Json.serialize updatedMenu
+            let updatedMenuDTO = { Name = updatedMenu.Name; NameAgain = updatedMenu.Name; Json = updatedMenuJson }
+            let storeResult = storeUpdatedMenu tableClient updatedMenuDTO etag log
+            match storeResult with
+            | Ok _ ->
+                let message = "Add menu item '" + menuItem.Recipe.Name + "' to menu '" + menu.Name + "' on: '" + menuItem.WeekDay.ToString() + "'was successful."
+                log.LogInformation message
+                Ok message
+            | Error _ ->
+                let error = "Add menu item '" + menuItem.Recipe.Name + "' to menu '" + menu.Name + "' on: '" + menuItem.WeekDay.ToString() + "' failed."
+                log.LogWarning error
+                Error error
+        | true ->
+            let error = "The same menu item already exists on the same day in the menu."
+            log.LogWarning error
+            Error error
+    | Error _ ->            
+        let error = "Add menu item to menu failed."
+        log.LogWarning error
+        Error error
+ 
+let removeItemFromMenu (tableClient: CloudTableClient) (recipeName: RecipeName) (weekDay: WeekDay) (menuName: MenuName) (log: ILogger) : Result<string, string> =
+    let getResult = getMenuForManipulation tableClient menuName log
+    match getResult with
+    | Ok (menu, etag) ->
+        let menuItems = menu.Items
+        let inList = List.exists (fun elem -> elem.Recipe.Name = recipeName && elem.WeekDay = weekDay) menuItems
+        match inList with
+        | true ->
+            let updatedItems = List.filter (fun elem -> elem.Recipe.Name <> recipeName && elem.WeekDay <> weekDay) menuItems
+            let updatedMenu = { menu with Items = updatedItems }
+            let updatedMenuJson = Json.serialize updatedMenu
+            let updatedMenuDTO = { Name = updatedMenu.Name; NameAgain = updatedMenu.Name; Json = updatedMenuJson }
+            let storeResult = storeUpdatedMenu tableClient updatedMenuDTO etag log
+            match storeResult with
+            | Ok _ ->
+                let message = "Remove menu item with recipe name '" + recipeName + "' on weekday '" + weekDay.ToString() + "' from menu '" + menu.Name + "' was successful."
+                log.LogInformation message
+                Ok message
+            | Error _ ->
+                let error = "Remove menu item with recipe name '" + recipeName + "' on weekday '" + weekDay.ToString() + "' from menu '" + menu.Name + "' failed."
+                log.LogWarning error
+                Error error
+        | false ->
+            let error = "The menu item could not be found in the menu."
+            log.LogWarning error
+            Error error
+    | Error _ ->            
+        let error = "Remove menu item from menu failed."
+        log.LogWarning error
+        Error error
+

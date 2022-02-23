@@ -20,6 +20,12 @@ type Action
     | RemoveIngredientFromRecipe
     | RemoveInstructionFromRecipe
     | RemoveCommentFromRecipe
+    | FindMenu
+    | InsertMenu
+    | RemoveMenu
+    | ChangeMenuName
+    | AddItemToMenu
+    | RemoveItemFromMenu
 
 type CommandJson =
     {
@@ -51,9 +57,26 @@ type LinkJson =
         Link: HttpLink option
     }
 
+type MenuNameJson =
+    {
+        MenuName: string option
+    }
+
+type NewMenuNameJson =
+    {
+        NewMenuName: string option
+    }
+
+type MenuItemRecipeNameAndWeekDayJson =
+    {
+        RecipeName: string option
+        WeekDay: WeekDay option
+    }
+
 type OperationResponse =
     {
         Recipes: Recipe list
+        Menus: Menu list
         Success: string option
         Error: string option
     }
@@ -62,6 +85,7 @@ type ResponseJson =
     {
         Message: string option
         Recipes: Recipe list
+        Menus: Menu list
     }
 
 let getCommandFromReqBody (body: string) (log: ILogger) : Action option =
@@ -163,3 +187,47 @@ let getLinkFromReqBody (body: string) (log: ILogger) : LinkJson =
             log.LogWarning <| "Get Portions failed with exception:\n" + ex.ToString()
             { Link = None }
 
+let getMenuNameFromReqBody (body: string) (log: ILogger) : MenuNameJson =
+    try
+        let menuName = Json.deserialize<MenuNameJson> body
+        menuName
+    with
+        ex ->
+            log.LogWarning <| "Get Menu name failed with exception:\n" + ex.ToString()
+            { MenuName = None }
+
+let getMenuFromReqBody (body: string) (log: ILogger) : Menu =
+    try
+        let menu = Json.deserialize<Menu> body
+        menu
+    with
+        ex ->
+            log.LogWarning <| "Get Menu failed with exception:\n" + ex.ToString()
+            { Name = ""; Items = [] }
+
+let getNewMenuNameFromReqBody (body: string) (log: ILogger) : NewMenuNameJson =
+    try
+        let newMenuName = Json.deserialize<NewMenuNameJson> body
+        newMenuName
+    with
+        ex ->
+            log.LogWarning <| "Get NewMenu name failed with exception:\n" + ex.ToString()
+            { NewMenuName = None }
+
+let getMenuItemFromReqBody (body: string) (log: ILogger) : MenuItem =
+    try
+        let menuItem = Json.deserialize<MenuItem> body
+        menuItem
+    with
+        ex ->
+            log.LogWarning <| "Get MenuItem name failed with exception:\n" + ex.ToString()
+            { Recipe = { Name = ""; Link = None; Portions = 0; Ingredients = []; Instructions = []; Comments = [] }; WeekDay = Monday } : MenuItem
+
+let getMenuItemRecipeNameAndWeekDayFromReqBody (body: string) (log: ILogger) : MenuItemRecipeNameAndWeekDayJson =
+    try
+        let menuItemRecipeNameAndWeekDay = Json.deserialize<MenuItemRecipeNameAndWeekDayJson> body
+        menuItemRecipeNameAndWeekDay
+    with
+        ex ->
+            log.LogWarning <| "Get MenuItemRecipeNameAndWeekDay failed with exception:\n" + ex.ToString()
+            { RecipeName = None; WeekDay = None }
