@@ -26,6 +26,12 @@ type Action
     | ChangeMenuName
     | AddItemToMenu
     | RemoveItemFromMenu
+    | FindShoppingList
+    | InsertShoppingList
+    | RemoveShoppingList
+    | ChangeShoppingListName
+    | AddItemToShoppingList
+    | RemoveItemFromShoppingList
 
 type CommandJson =
     {
@@ -73,10 +79,26 @@ type MenuItemRecipeNameAndWeekDayJson =
         WeekDay: WeekDay option
     }
 
+type ShoppingListNameJson =
+    {
+        ShoppingListName: string option
+    }
+
+type NewShoppingListNameJson =
+    {
+        NewShoppingListName: string option
+    }
+
+type ShoppingItemNameJson =
+    {
+        ShoppingItemName: string option
+    }
+
 type OperationResponse =
     {
         Recipes: Recipe list
         Menus: Menu list
+        ShoppingLists: ShoppingList list
         Success: string option
         Error: string option
     }
@@ -86,6 +108,7 @@ type ResponseJson =
         Message: string option
         Recipes: Recipe list
         Menus: Menu list
+        ShoppingLists: ShoppingList list
     }
 
 let getCommandFromReqBody (body: string) (log: ILogger) : Action option =
@@ -231,3 +254,48 @@ let getMenuItemRecipeNameAndWeekDayFromReqBody (body: string) (log: ILogger) : M
         ex ->
             log.LogWarning <| "Get MenuItemRecipeNameAndWeekDay failed with exception:\n" + ex.ToString()
             { RecipeName = None; WeekDay = None }
+
+let getShoppingListNameFromReqBody (body: string) (log: ILogger) : ShoppingListNameJson =
+    try
+        let shoppingListName = Json.deserialize<ShoppingListNameJson> body
+        shoppingListName
+    with
+        ex ->
+            log.LogWarning <| "Get ShoppingList name failed with exception:\n" + ex.ToString()
+            { ShoppingListName = None }
+
+let getShoppingListFromReqBody (body: string) (log: ILogger) : ShoppingList =
+    try
+        let shoppingList = Json.deserialize<ShoppingList> body
+        shoppingList
+    with
+        ex ->
+            log.LogWarning <| "Get ShoppingList failed with exception:\n" + ex.ToString()
+            { Name = ""; Items = [] }
+
+let getNewShoppingListNameFromReqBody (body: string) (log: ILogger) : NewShoppingListNameJson =
+    try
+        let newShoppingListName = Json.deserialize<NewShoppingListNameJson> body
+        newShoppingListName
+    with
+        ex ->
+            log.LogWarning <| "Get NewShoppingList name failed with exception:\n" + ex.ToString()
+            { NewShoppingListName = None }
+
+let getShoppingItemFromReqBody (body: string) (log: ILogger) : ShoppingItem =
+    try
+        let shoppingItem = Json.deserialize<ShoppingItem> body
+        shoppingItem
+    with
+        ex ->
+            log.LogWarning <| "Get ShoppingItem name failed with exception:\n" + ex.ToString()
+            { Name = ""; Item = { Product = { Name = ""; Link = None; Comments = [] }; Quantity = { Amount = 0.0; Unit = NotDefined } }; Comments = [] } : ShoppingItem
+
+let getShoppingItemNameFromReqBody (body: string) (log: ILogger) : ShoppingItemNameJson =
+    try
+        let shoppingItemName = Json.deserialize<ShoppingItemNameJson> body
+        shoppingItemName
+    with
+        ex ->
+            log.LogWarning <| "Get ShoppingItem name failed with exception:\n" + ex.ToString()
+            { ShoppingItemName = None }

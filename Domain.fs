@@ -1,8 +1,5 @@
 module WebBackend.Domain
 
-
-// Meals
-
 type ProductName = string
 type ShoppingItemName = string
 type ShoppingListName = string
@@ -25,8 +22,6 @@ type Quantity =
         Amount : float
         Unit : RecipeUnit
     }
-
-type SearchString = string
 
 type HttpLink = string
 
@@ -70,7 +65,7 @@ type ShoppingItem =
     {
         Name : ShoppingItemName
         Item : QuantifiedProduct
-        Comment : Comment list
+        Comments : Comment list
     }
 
 type Recipe =

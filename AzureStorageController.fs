@@ -647,3 +647,225 @@ let removeItemFromMenu (tableClient: CloudTableClient) (recipeName: RecipeName) 
         log.LogWarning error
         Error error
 
+
+/// ShoppingList
+
+type ShoppingListDTO =
+    {
+        [<PartitionKey>] Name : ShoppingListName
+        [<RowKey>] NameAgain : ShoppingListName
+        Json : string
+    }
+
+let getShoppingListsFromTable (tableClient: CloudTableClient) : ShoppingListDTO list =
+    let fromShoppingListsTable q = fromTable tableClient "ShoppingLists" q
+    let shoppingLists =
+        Query.all<ShoppingListDTO>
+        |> fromShoppingListsTable
+        |> Seq.map (fun (b,_) -> b)
+        |> Seq.toList
+    shoppingLists
+
+let findShoppingListsUsingName (tableClient: CloudTableClient) (name: string) (log: ILogger) : ShoppingListDTO list =
+    let fromShoppingListTable q = fromTable tableClient "ShoppingLists" q
+    log.LogInformation <| "Trying to find shopping list with Name: '" + name + "'."
+    let shoppingLists =
+        Query.all<ShoppingListDTO>
+        |> Query.where <@ fun _ s -> s.PartitionKey = name @>
+        |> fromShoppingListTable
+        |> Seq.map (fun (b,_) -> b)
+        |> Seq.toList
+    shoppingLists
+
+let insertShoppingListInTable (tableClient: CloudTableClient) (shoppingList: ShoppingListDTO) (log: ILogger) : Result<string, string> =
+    let inShoppingListTable r = inTable tableClient "ShoppingLists" r
+    try
+        let result = shoppingList |> Insert |> inShoppingListTable
+        match result.HttpStatusCode with
+        | 200 | 201 | 202 | 203 | 204 | 205 ->
+            let message = "ShoppingList '" + shoppingList.Name.ToString() + "' successfully inserted."
+            log.LogInformation message
+            Ok message
+        | code ->
+            let error = "Could not insert shoppingList '" + shoppingList.ToString() + "'.\nHTTP Status: '" + code.ToString() + "'."
+            log.LogWarning error
+            Error error
+    with
+        | :? StorageException as sx ->
+            match sx.Message with
+            | "Conflict" ->
+                let error = "Insert failed due to conflicting Keys, a shoppingList with name '" + shoppingList.Name + "' already exists."
+                log.LogWarning error
+                Error error
+            | _ ->
+                let error = "Insert failed with exception:\n" + sx.ToString()
+                log.LogWarning error
+                Error error
+        | ex ->
+            let error = "Insert failed with exception:\n" + ex.ToString()
+            log.LogWarning error
+            Error error
+
+let removeShoppingListFromTable (tableClient: CloudTableClient) (name: string) (log: ILogger) : Result<string, string> =
+    let inShoppingListTable r = inTable tableClient "ShoppingLists" r
+    try
+        let result = { EntityIdentifier.PartitionKey = name; RowKey = name } |> ForceDelete |> inShoppingListTable
+        match result.HttpStatusCode with
+        | 200 | 201 | 202 | 203 | 204 | 205 ->
+            let message = "ShoppingList '" + name + "' successfully removed."
+            log.LogInformation message
+            Ok message
+        | code ->
+            let error = "Could not remove shoppingList '" + name + "'.\nHTTP Status: '" + code.ToString() + "'."
+            log.LogWarning error
+            Error error
+    with
+        | :? StorageException as sx ->
+            match sx.Message with
+            | "Not Found" ->
+                let error = "Remove failed due to that a shoppingList with name: '" + name + "' could not be found."
+                log.LogWarning error
+                Error error
+            | _ ->
+                let error = "Remove failed with exception:\n" + sx.ToString()
+                log.LogWarning error
+                Error error
+        | ex ->
+            let error = "Remove failed with exception:\n" + ex.ToString()
+            log.LogWarning error
+            Error error
+
+let getShoppingListForManipulation (tableClient: CloudTableClient) (shoppingListName: ShoppingListName) (log: ILogger) : Result<(ShoppingList * string), string> =
+    let fromShoppingListTable q = fromTable tableClient "ShoppingLists" q
+    let inShoppingListTable r = inTable tableClient "ShoppingLists" r
+    try
+        let queryResults =
+            Query.all<ShoppingListDTO>
+            |> Query.where <@ fun _ s -> s.PartitionKey = shoppingListName && s.RowKey = shoppingListName @>
+            |> fromShoppingListTable
+            |> Seq.toList
+        match queryResults with
+        | [] ->
+            let error = "Get shoppingList for manipulation failed since there is no shoppingList with name: '" + shoppingListName + "'."
+            log.LogWarning error
+            Error error
+        | queryResults ->
+            try
+                let (shoppingListDTO, metaData) = queryResults.Head
+                let shoppingList = Json.deserialize<ShoppingList> shoppingListDTO.Json
+                let etag = metaData.Etag
+                Ok (shoppingList, etag)
+            with
+                | ex ->
+                    let error = "Get shoppingList for manipulation failed in deserialization, with exception:\n" + ex.ToString()
+                    log.LogWarning error
+                    Error error
+    with
+        | ex ->
+            let error = "Get shoppingList for manipulation failed in query, with exception:\n" + ex.ToString()
+            log.LogWarning error
+            Error error
+
+let storeUpdatedShoppingList (tableClient: CloudTableClient) (shoppingListDTO: ShoppingListDTO) (etag: string) (log: ILogger) : Result<string, string> =
+    let inShoppingListTable r = inTable tableClient "ShoppingLists" r
+    try
+        let replaceResult = (shoppingListDTO, etag) |> Replace |> inShoppingListTable
+        match replaceResult.HttpStatusCode with
+        | 200 | 201 | 202 | 203 | 204 | 205 ->
+            let message = "Store updated shoppingList '" + shoppingListDTO.Name + "' was successful."
+            log.LogInformation message
+            Ok message
+        | code ->
+            let error = "Store updated shoppingList '" + shoppingListDTO.Name + "' failed.\nHTTP Status: '" + code.ToString() + "'."
+            log.LogWarning error
+            Error error
+    with
+        | ex ->
+            let error = "Store updated shoppingList failed with exception:\n" + ex.ToString()
+            log.LogWarning error
+            Error error
+
+let updateShoppingListWithNewName (tableClient: CloudTableClient) (shoppingListName: ShoppingListName) (newShoppingListName: ShoppingListName) (log: ILogger) : Result<string, string> =
+    let getResult = getShoppingListForManipulation tableClient shoppingListName log
+    match getResult with
+    | Ok (shoppingList, etag) ->
+        let updatedShoppingList = { shoppingList with Name = newShoppingListName } : ShoppingList
+        let updatedShoppingListJson = Json.serialize updatedShoppingList
+        let updatedShoppingListDTO = { Name = updatedShoppingList.Name; NameAgain = updatedShoppingList.Name; Json = updatedShoppingListJson }
+        let storeResult = storeUpdatedShoppingList tableClient updatedShoppingListDTO etag log
+        match storeResult with
+        | Ok _ ->
+            let message = "Update of shoppingList '" + shoppingList.Name + "' with new name '" + updatedShoppingList.Name + "' was successful."
+            log.LogInformation message
+            Ok message
+        | Error _ ->
+            let error = "Update of shoppingList '" + shoppingListName + "' with new name '" + newShoppingListName + "' failed."
+            log.LogWarning error
+            Error error
+    | Error _ ->
+        let error = "Update shoppingList with new name failed."
+        log.LogWarning error
+        Error error
+
+let addItemToShoppingList (tableClient: CloudTableClient) (shoppingItem: ShoppingItem) (shoppingListName: ShoppingListName) (log: ILogger) : Result<string, string> =
+    let getResult = getShoppingListForManipulation tableClient shoppingListName log
+    match getResult with
+    | Ok (shoppingList, etag) ->
+        let shoppingItems = shoppingList.Items
+        let alreadyInList = List.exists (fun (elem : ShoppingItem) -> elem.Name = shoppingItem.Name) shoppingItems
+        match alreadyInList with
+        | false ->
+            let updatedItems = shoppingItems @ [shoppingItem]
+            let updatedShoppingList = { shoppingList with Items = updatedItems }
+            let updatedShoppingListJson = Json.serialize updatedShoppingList
+            let updatedShoppingListDTO = { Name = updatedShoppingList.Name; NameAgain = updatedShoppingList.Name; Json = updatedShoppingListJson }
+            let storeResult = storeUpdatedShoppingList tableClient updatedShoppingListDTO etag log
+            match storeResult with
+            | Ok _ ->
+                let message = "Add shoppingList item '" + shoppingItem.Name + "' to shoppingList '" + shoppingList.Name + "'was successful."
+                log.LogInformation message
+                Ok message
+            | Error _ ->
+                let error = "Add shoppingList item '" + shoppingItem.Name + "' to shoppingList '" + shoppingList.Name + "' failed."
+                log.LogWarning error
+                Error error
+        | true ->
+            let error = "The same shoppingList item already exists on the same day in the shoppingList."
+            log.LogWarning error
+            Error error
+    | Error _ ->            
+        let error = "Add shoppingList item to shoppingList failed."
+        log.LogWarning error
+        Error error
+ 
+let removeItemFromShoppingList (tableClient: CloudTableClient) (shoppingItemName: ShoppingItemName) (shoppingListName: ShoppingListName) (log: ILogger) : Result<string, string> =
+    let getResult = getShoppingListForManipulation tableClient shoppingListName log
+    match getResult with
+    | Ok (shoppingList, etag) ->
+        let shoppingItems = shoppingList.Items
+        let inList = List.exists (fun (elem : ShoppingItem) -> elem.Name = shoppingItemName) shoppingItems
+        match inList with
+        | true ->
+            let updatedItems = List.filter (fun (elem : ShoppingItem) -> elem.Name <> shoppingItemName) shoppingItems
+            let updatedShoppingList = { shoppingList with Items = updatedItems }
+            let updatedShoppingListJson = Json.serialize updatedShoppingList
+            let updatedShoppingListDTO = { Name = updatedShoppingList.Name; NameAgain = updatedShoppingList.Name; Json = updatedShoppingListJson }
+            let storeResult = storeUpdatedShoppingList tableClient updatedShoppingListDTO etag log
+            match storeResult with
+            | Ok _ ->
+                let message = "Remove shoppingList item with recipe name '" + shoppingItemName + "' from shoppingList '" + shoppingList.Name + "' was successful."
+                log.LogInformation message
+                Ok message
+            | Error _ ->
+                let error = "Remove shoppingList item with recipe name '" + shoppingItemName + "' from shoppingList '" + shoppingList.Name + "' failed."
+                log.LogWarning error
+                Error error
+        | false ->
+            let error = "The shoppingList item could not be found in the shoppingList."
+            log.LogWarning error
+            Error error
+    | Error _ ->            
+        let error = "Remove shoppingList item from shoppingList failed."
+        log.LogWarning error
+        Error error
+
