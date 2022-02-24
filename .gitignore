@@ -281,3 +281,6 @@ __queuestorage__/
 # Secret keys
 .env
 .git-replacements
+
+# TODO list
+TODO.txt
