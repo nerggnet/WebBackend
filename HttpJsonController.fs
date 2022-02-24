@@ -244,7 +244,7 @@ let getMenuItemFromReqBody (body: string) (log: ILogger) : MenuItem =
     with
         ex ->
             log.LogWarning <| "Get MenuItem name failed with exception:\n" + ex.ToString()
-            { Recipe = { Name = ""; Link = None; Portions = 0; Ingredients = []; Instructions = []; Comments = [] }; WeekDay = Monday } : MenuItem
+            { RecipeName = ""; WeekDay = Monday } : MenuItem
 
 let getMenuItemRecipeNameAndWeekDayFromReqBody (body: string) (log: ILogger) : MenuItemRecipeNameAndWeekDayJson =
     try

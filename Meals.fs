@@ -309,7 +309,7 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
             | Some AddItemToMenu ->
                 let menuItem = getMenuItemFromReqBody reqBody log
                 let menuName = getMenuNameFromReqBody reqBody log
-                match (menuItem.Recipe.Name, menuName.MenuName) with
+                match (menuItem.RecipeName, menuName.MenuName) with
                 | ("", _) ->
                     let error = "Invalid menuItem."
                     log.LogWarning error

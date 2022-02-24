@@ -86,7 +86,7 @@ type ShoppingList =
 
 type MenuItem =
     {
-        Recipe : Recipe
+        RecipeName : RecipeName
         WeekDay : WeekDay
     }
 

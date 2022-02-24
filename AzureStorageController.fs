@@ -590,7 +590,7 @@ let addItemToMenu (tableClient: CloudTableClient) (menuItem: MenuItem) (menuName
     match getResult with
     | Ok (menu, etag) ->
         let menuItems = menu.Items
-        let alreadyInList = List.exists (fun elem -> elem.Recipe.Name = menuItem.Recipe.Name && elem.WeekDay = menuItem.WeekDay) menuItems
+        let alreadyInList = List.exists (fun elem -> elem.RecipeName = menuItem.RecipeName && elem.WeekDay = menuItem.WeekDay) menuItems
         match alreadyInList with
         | false ->
             let updatedItems = menuItems @ [menuItem]
@@ -600,11 +600,11 @@ let addItemToMenu (tableClient: CloudTableClient) (menuItem: MenuItem) (menuName
             let storeResult = storeUpdatedMenu tableClient updatedMenuDTO etag log
             match storeResult with
             | Ok _ ->
-                let message = "Add menu item '" + menuItem.Recipe.Name + "' to menu '" + menu.Name + "' on: '" + menuItem.WeekDay.ToString() + "'was successful."
+                let message = "Add menu item '" + menuItem.RecipeName + "' to menu '" + menu.Name + "' on: '" + menuItem.WeekDay.ToString() + "'was successful."
                 log.LogInformation message
                 Ok message
             | Error _ ->
-                let error = "Add menu item '" + menuItem.Recipe.Name + "' to menu '" + menu.Name + "' on: '" + menuItem.WeekDay.ToString() + "' failed."
+                let error = "Add menu item '" + menuItem.RecipeName + "' to menu '" + menu.Name + "' on: '" + menuItem.WeekDay.ToString() + "' failed."
                 log.LogWarning error
                 Error error
         | true ->
@@ -621,10 +621,10 @@ let removeItemFromMenu (tableClient: CloudTableClient) (recipeName: RecipeName) 
     match getResult with
     | Ok (menu, etag) ->
         let menuItems = menu.Items
-        let inList = List.exists (fun elem -> elem.Recipe.Name = recipeName && elem.WeekDay = weekDay) menuItems
+        let inList = List.exists (fun elem -> elem.RecipeName = recipeName && elem.WeekDay = weekDay) menuItems
         match inList with
         | true ->
-            let updatedItems = List.filter (fun elem -> elem.Recipe.Name <> recipeName && elem.WeekDay <> weekDay) menuItems
+            let updatedItems = List.filter (fun elem -> elem.RecipeName <> recipeName && elem.WeekDay <> weekDay) menuItems
             let updatedMenu = { menu with Items = updatedItems }
             let updatedMenuJson = Json.serialize updatedMenu
             let updatedMenuDTO = { Name = updatedMenu.Name; NameAgain = updatedMenu.Name; Json = updatedMenuJson }
