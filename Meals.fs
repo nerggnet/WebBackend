@@ -324,19 +324,19 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                     | Ok message -> { Recipes = []; Menus = []; ShoppingLists = []; Success = Some message; Error = None } : OperationResponse
                     | Error error -> { Recipes = []; Menus = []; ShoppingLists = []; Success = None; Error = Some error } : OperationResponse
             | Some RemoveItemFromMenu ->
-                let menuItemRecipeNameAndWeekDay = getMenuItemRecipeNameAndWeekDayFromReqBody reqBody log
+                let menuItem = getMenuItemFromReqBody reqBody log
                 let menuName = getMenuNameFromReqBody reqBody log
-                match (menuItemRecipeNameAndWeekDay.RecipeName, menuItemRecipeNameAndWeekDay.WeekDay, menuName.MenuName) with
-                | (None, _, _) | (_, None, _) ->
+                match (menuItem.RecipeName, menuName.MenuName) with
+                | ("", _) ->
                     let error = "Invalid menuItem."
                     log.LogWarning error
                     { Recipes = []; Menus = []; ShoppingLists = []; Success = None; Error = Some error } : OperationResponse
-                | (_, _, None) ->
+                | (_, None) ->
                     let error = "No menu specified."
                     log.LogWarning error
                     { Recipes = []; Menus = []; ShoppingLists = []; Success = None; Error = Some error } : OperationResponse
-                | (Some recipeName, Some weekDay, Some menuName) ->
-                    let result = removeItemFromMenu tableClient recipeName weekDay menuName log
+                | (_, Some menuName) ->
+                    let result = removeItemFromMenu tableClient menuItem.RecipeName menuItem.WeekDay menuName log
                     match result with
                     | Ok message -> { Recipes = []; Menus = []; ShoppingLists = []; Success = Some message; Error = None } : OperationResponse
                     | Error error -> { Recipes = []; Menus = []; ShoppingLists = []; Success = None; Error = Some error } : OperationResponse

@@ -73,11 +73,11 @@ type NewMenuNameJson =
         NewMenuName: string option
     }
 
-type MenuItemRecipeNameAndWeekDayJson =
-    {
-        RecipeName: string option
-        WeekDay: WeekDay option
-    }
+// type MenuItemRecipeNameAndWeekDayJson =
+//     {
+//         RecipeName: string option
+//         WeekDay: WeekDay option
+//     }
 
 type ShoppingListNameJson =
     {
@@ -246,14 +246,14 @@ let getMenuItemFromReqBody (body: string) (log: ILogger) : MenuItem =
             log.LogWarning <| "Get MenuItem name failed with exception:\n" + ex.ToString()
             { RecipeName = ""; WeekDay = Monday } : MenuItem
 
-let getMenuItemRecipeNameAndWeekDayFromReqBody (body: string) (log: ILogger) : MenuItemRecipeNameAndWeekDayJson =
+let getMenuItemRecipeNameAndWeekDayFromReqBody (body: string) (log: ILogger) : MenuItem =
     try
-        let menuItemRecipeNameAndWeekDay = Json.deserialize<MenuItemRecipeNameAndWeekDayJson> body
+        let menuItemRecipeNameAndWeekDay = Json.deserialize<MenuItem> body
         menuItemRecipeNameAndWeekDay
     with
         ex ->
             log.LogWarning <| "Get MenuItemRecipeNameAndWeekDay failed with exception:\n" + ex.ToString()
-            { RecipeName = None; WeekDay = None }
+            { RecipeName = ""; WeekDay = Monday }
 
 let getShoppingListNameFromReqBody (body: string) (log: ILogger) : ShoppingListNameJson =
     try
