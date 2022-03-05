@@ -73,12 +73,6 @@ type NewMenuNameJson =
         NewMenuName: string option
     }
 
-// type MenuItemRecipeNameAndWeekDayJson =
-//     {
-//         RecipeName: string option
-//         WeekDay: WeekDay option
-//     }
-
 type ShoppingListNameJson =
     {
         ShoppingListName: string option
