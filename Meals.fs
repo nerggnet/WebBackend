@@ -136,6 +136,34 @@ let run ([<HttpTrigger(AuthorizationLevel.Function, "post", Route = null)>]req: 
                     match result with
                     | Ok message -> { Recipes = []; Menus = []; ShoppingLists = []; Success = Some message; Error = None } : OperationResponse
                     | Error error -> { Recipes = []; Menus = []; ShoppingLists = []; Success = None; Error = Some error } : OperationResponse
+            | Some ChangeRecipeBaseInfo ->
+                let recipeName = getRecipeNameFromReqBody reqBody log
+                let newRecipeName = getNewRecipeNameFromReqBody reqBody log
+                let portions = getPortionsFromReqBody reqBody log
+                let link = getLinkFromReqBody reqBody log
+                match (recipeName.RecipeName, newRecipeName.NewRecipeName, portions.Portions, link.Link) with
+                | (None, _, _, _) ->
+                    let error = "No recipe to change found."
+                    log.LogWarning error
+                    { Recipes = []; Menus = []; ShoppingLists = []; Success = None; Error = Some error } : OperationResponse
+                | (_, None, _, _) ->
+                    let error = "No new recipe name specified."
+                    log.LogWarning error
+                    { Recipes = []; Menus = []; ShoppingLists = []; Success = None; Error = Some error } : OperationResponse
+                | (_, _, None, _) ->
+                    let error = "No new portion size specified."
+                    log.LogWarning error
+                    { Recipes = []; Menus = []; ShoppingLists = []; Success = None; Error = Some error } : OperationResponse
+                | (_, _, _, None) ->
+                    let error = "No new link specified."
+                    log.LogWarning error
+                    { Recipes = []; Menus = []; ShoppingLists = []; Success = None; Error = Some error } : OperationResponse
+                | (Some recipeName, Some newRecipeName, Some portions, Some httpLink) ->
+                    let result = updateRecipeWithNewBaseInfo tableClient recipeName newRecipeName portions httpLink log
+                    match result with
+                    | Ok message -> { Recipes = []; Menus = []; ShoppingLists = []; Success = Some message; Error = None } : OperationResponse
+                    | Error error -> { Recipes = []; Menus = []; ShoppingLists = []; Success = None; Error = Some error } : OperationResponse
+
             | Some AddIngredientToRecipe ->
                 let ingredient = getIngredientFromReqBody reqBody log
                 let recipeName = getRecipeNameFromReqBody reqBody log

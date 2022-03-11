@@ -425,6 +425,28 @@ let updateRecipeWithNewLink (tableClient: CloudTableClient) (recipeName: RecipeN
         log.LogWarning error
         Error error
 
+let updateRecipeWithNewBaseInfo (tableClient: CloudTableClient) (recipeName: RecipeName) (newRecipeName: RecipeName) (newPortions: Portions) (newLink: HttpLink) (log: ILogger) : Result<string, string> =
+    let getResult = getRecipeForManipulation tableClient recipeName log
+    match getResult with
+    | Ok (recipe, etag) ->
+        let updatedRecipe = { recipe with Name = newRecipeName; Portions = newPortions; Link = Some newLink }
+        let updatedRecipeJson = Json.serialize updatedRecipe
+        let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
+        let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+        match storeResult with
+        | Ok _ ->
+            let message = "Update of recipe '" + recipe.Name + "' with new name '" + updatedRecipe.Name + "', new portions '" + newPortions.ToString() + "', and new link '" + newLink + "' was successful."
+            log.LogInformation message
+            Ok message
+        | Error _ ->
+            let error = "Update of recipe '" + recipe.Name + "' with new name '" + updatedRecipe.Name + "', new portions '" + newPortions.ToString() + "', and new link '" + newLink + "' failed."
+            log.LogWarning error
+            Error error
+    | Error _ ->
+        let error = "Update recipe with new name, new portions and new link failed."
+        log.LogWarning error
+        Error error
+
 
 /// Menus
 

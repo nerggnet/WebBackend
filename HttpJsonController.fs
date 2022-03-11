@@ -14,6 +14,7 @@ type Action
     | ChangeRecipeName
     | UpdateRecipeLink
     | ChangeRecipePortions
+    | ChangeRecipeBaseInfo
     | AddIngredientToRecipe
     | AddInstructionToRecipe
     | AddCommentToRecipe
