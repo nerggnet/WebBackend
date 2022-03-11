@@ -178,15 +178,15 @@ let replaceRecipeWithNewName (tableClient: CloudTableClient) (recipeDTO: RecipeD
         let removeResult = removeRecipeFromTable tableClient oldName log
         let insertResult = insertRecipeInTable tableClient recipeDTO log
         match (removeResult, insertResult) with
-        | (Ok removeMessage, Ok insertMessage) ->
+        | (Ok _, Ok _) ->
             let message = "Replace recipe with old name: '" + oldName + "' with recipe with new name: '" + newName + "' was successful."
             log.LogInformation message
             Ok message
-        | (Ok removeMessage, Error insertError) ->
+        | (Ok _, Error insertError) ->
             let error = "Replace recipe with old name: '" + oldName + "' with recipe with new name: '" + newName + "' failed in the insert step, with this error message: '" + insertError + "'."
             log.LogWarning error
             Error error
-        | (Error removeError, Ok insertMessage) ->
+        | (Error removeError, Ok _) ->
             let error = "Replace recipe with old name: '" + oldName + "' with recipe with new name: '" + newName + "' failed in the remove step, with this error message: '" + removeError + "'."
             log.LogWarning error
             Error error
@@ -612,14 +612,41 @@ let storeUpdatedMenu (tableClient: CloudTableClient) (menuDTO: MenuDTO) (etag: s
             log.LogWarning error
             Error error
 
+let replaceMenuWithNewName (tableClient: CloudTableClient) (menuDTO: MenuDTO) (oldName: MenuName) (newName: MenuName) (log: ILogger) : Result<string, string> =
+    try
+        let removeResult = removeMenuFromTable tableClient oldName log
+        let insertResult = insertMenuInTable tableClient menuDTO log
+        match (removeResult, insertResult) with
+        | (Ok _, Ok _) ->
+            let message = "Replace menu with old name: '" + oldName + "' with menu with new name: '" + newName + "' was successful."
+            log.LogInformation message
+            Ok message
+        | (Ok _, Error insertError) ->
+            let error = "Replace menu with old name: '" + oldName + "' with menu with new name: '" + newName + "' failed in the insert step, with this error message: '" + insertError + "'."
+            log.LogWarning error
+            Error error
+        | (Error removeError, Ok _) ->
+            let error = "Replace menu with old name: '" + oldName + "' with menu with new name: '" + newName + "' failed in the remove step, with this error message: '" + removeError + "'."
+            log.LogWarning error
+            Error error
+        | (Error removeError, Error insertError) ->
+            let error = "Replace menu with old name: '" + oldName + "' with menu with new name: '" + newName + "' failed in both the remove and insert steps, with these error messages: '" + removeError + "' and '" + insertError + "'."
+            log.LogWarning error
+            Error error
+    with
+        | ex ->
+            let error = "Replace menu with new name failed with exception:\n" + ex.ToString()
+            log.LogWarning error
+            Error error
+
 let updateMenuWithNewName (tableClient: CloudTableClient) (menuName: MenuName) (newMenuName: MenuName) (log: ILogger) : Result<string, string> =
     let getResult = getMenuForManipulation tableClient menuName log
     match getResult with
-    | Ok (menu, etag) ->
+    | Ok (menu, _) ->
         let updatedMenu = { menu with Name = newMenuName } : Menu
         let updatedMenuJson = Json.serialize updatedMenu
         let updatedMenuDTO = { Name = updatedMenu.Name; NameAgain = updatedMenu.Name; Json = updatedMenuJson }
-        let storeResult = storeUpdatedMenu tableClient updatedMenuDTO etag log
+        let storeResult = replaceMenuWithNewName tableClient updatedMenuDTO menuName newMenuName log
         match storeResult with
         | Ok _ ->
             let message = "Update of menu '" + menu.Name + "' with new name '" + updatedMenu.Name + "' was successful."
@@ -834,14 +861,41 @@ let storeUpdatedShoppingList (tableClient: CloudTableClient) (shoppingListDTO: S
             log.LogWarning error
             Error error
 
+let replaceShoppingListWithNewName (tableClient: CloudTableClient) (shoppingListDTO: ShoppingListDTO) (oldName: ShoppingListName) (newName: ShoppingListName) (log: ILogger) : Result<string, string> =
+    try
+        let removeResult = removeShoppingListFromTable tableClient oldName log
+        let insertResult = insertShoppingListInTable tableClient shoppingListDTO log
+        match (removeResult, insertResult) with
+        | (Ok _, Ok _) ->
+            let message = "Replace shoppingList with old name: '" + oldName + "' with shoppingList with new name: '" + newName + "' was successful."
+            log.LogInformation message
+            Ok message
+        | (Ok _, Error insertError) ->
+            let error = "Replace shoppingList with old name: '" + oldName + "' with shoppingList with new name: '" + newName + "' failed in the insert step, with this error message: '" + insertError + "'."
+            log.LogWarning error
+            Error error
+        | (Error removeError, Ok _) ->
+            let error = "Replace shoppingList with old name: '" + oldName + "' with shoppingList with new name: '" + newName + "' failed in the remove step, with this error message: '" + removeError + "'."
+            log.LogWarning error
+            Error error
+        | (Error removeError, Error insertError) ->
+            let error = "Replace shoppingList with old name: '" + oldName + "' with shoppingList with new name: '" + newName + "' failed in both the remove and insert steps, with these error messages: '" + removeError + "' and '" + insertError + "'."
+            log.LogWarning error
+            Error error
+    with
+        | ex ->
+            let error = "Replace shoppingList with new name failed with exception:\n" + ex.ToString()
+            log.LogWarning error
+            Error error
+
 let updateShoppingListWithNewName (tableClient: CloudTableClient) (shoppingListName: ShoppingListName) (newShoppingListName: ShoppingListName) (log: ILogger) : Result<string, string> =
     let getResult = getShoppingListForManipulation tableClient shoppingListName log
     match getResult with
-    | Ok (shoppingList, etag) ->
+    | Ok (shoppingList, _) ->
         let updatedShoppingList = { shoppingList with Name = newShoppingListName } : ShoppingList
         let updatedShoppingListJson = Json.serialize updatedShoppingList
         let updatedShoppingListDTO = { Name = updatedShoppingList.Name; NameAgain = updatedShoppingList.Name; Json = updatedShoppingListJson }
-        let storeResult = storeUpdatedShoppingList tableClient updatedShoppingListDTO etag log
+        let storeResult = replaceShoppingListWithNewName tableClient updatedShoppingListDTO shoppingListName newShoppingListName log
         match storeResult with
         | Ok _ ->
             let message = "Update of shoppingList '" + shoppingList.Name + "' with new name '" + updatedShoppingList.Name + "' was successful."
