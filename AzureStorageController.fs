@@ -173,6 +173,33 @@ let storeUpdatedRecipe (tableClient: CloudTableClient) (recipeDTO: RecipeDTO) (e
             log.LogWarning error
             Error error
 
+let replaceRecipeWithNewName (tableClient: CloudTableClient) (recipeDTO: RecipeDTO) (oldName: RecipeName) (newName: RecipeName) (log: ILogger) : Result<string, string> =
+    try
+        let removeResult = removeRecipeFromTable tableClient oldName log
+        let insertResult = insertRecipeInTable tableClient recipeDTO log
+        match (removeResult, insertResult) with
+        | (Ok removeMessage, Ok insertMessage) ->
+            let message = "Replace recipe with old name: '" + oldName + "' with recipe with new name: '" + newName + "' was successful."
+            log.LogInformation message
+            Ok message
+        | (Ok removeMessage, Error insertError) ->
+            let error = "Replace recipe with old name: '" + oldName + "' with recipe with new name: '" + newName + "' failed in the insert step, with this error message: '" + insertError + "'."
+            log.LogWarning error
+            Error error
+        | (Error removeError, Ok insertMessage) ->
+            let error = "Replace recipe with old name: '" + oldName + "' with recipe with new name: '" + newName + "' failed in the remove step, with this error message: '" + removeError + "'."
+            log.LogWarning error
+            Error error
+        | (Error removeError, Error insertError) ->
+            let error = "Replace recipe with old name: '" + oldName + "' with recipe with new name: '" + newName + "' failed in both the remove and insert steps, with these error messages: '" + removeError + "' and '" + insertError + "'."
+            log.LogWarning error
+            Error error
+    with
+        | ex ->
+            let error = "Replace recipe with new name failed with exception:\n" + ex.ToString()
+            log.LogWarning error
+            Error error
+
 let addIngredientToRecipe (tableClient: CloudTableClient) (ingredient: Ingredient) (recipeName: RecipeName) (log: ILogger) : Result<string, string> =
     let getResult = getRecipeForManipulation tableClient recipeName log
     match getResult with
@@ -362,11 +389,11 @@ let removeCommentFromRecipe (tableClient: CloudTableClient) (comment: Comment) (
 let updateRecipeWithNewName (tableClient: CloudTableClient) (recipeName: RecipeName) (newRecipeName: RecipeName) (log: ILogger) : Result<string, string> =
     let getResult = getRecipeForManipulation tableClient recipeName log
     match getResult with
-    | Ok (recipe, etag) ->
+    | Ok (recipe, _) ->
         let updatedRecipe = { recipe with Name = newRecipeName }
         let updatedRecipeJson = Json.serialize updatedRecipe
         let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
-        let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+        let storeResult = replaceRecipeWithNewName tableClient updatedRecipeDTO recipeName newRecipeName log
         match storeResult with
         | Ok _ ->
             let message = "Update of recipe '" + recipe.Name + "' with new name '" + updatedRecipe.Name + "' was successful."
@@ -428,11 +455,11 @@ let updateRecipeWithNewLink (tableClient: CloudTableClient) (recipeName: RecipeN
 let updateRecipeWithNewBaseInfo (tableClient: CloudTableClient) (recipeName: RecipeName) (newRecipeName: RecipeName) (newPortions: Portions) (newLink: HttpLink) (log: ILogger) : Result<string, string> =
     let getResult = getRecipeForManipulation tableClient recipeName log
     match getResult with
-    | Ok (recipe, etag) ->
+    | Ok (recipe, _) ->
         let updatedRecipe = { recipe with Name = newRecipeName; Portions = newPortions; Link = Some newLink }
         let updatedRecipeJson = Json.serialize updatedRecipe
         let updatedRecipeDTO = { Name = updatedRecipe.Name; NameAgain = updatedRecipe.Name; Json = updatedRecipeJson }
-        let storeResult = storeUpdatedRecipe tableClient updatedRecipeDTO etag log
+        let storeResult = replaceRecipeWithNewName tableClient updatedRecipeDTO recipeName newRecipeName log
         match storeResult with
         | Ok _ ->
             let message = "Update of recipe '" + recipe.Name + "' with new name '" + updatedRecipe.Name + "', new portions '" + newPortions.ToString() + "', and new link '" + newLink + "' was successful."
